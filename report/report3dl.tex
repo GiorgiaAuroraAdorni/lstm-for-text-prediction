@@ -1,0 +1,100 @@
+\documentclass[a4paper,12pt]{article} % This defines the style of your paper
+
+\usepackage[top = 2.5cm, bottom = 2.5cm, left = 2.5cm, right = 2.5cm]{geometry} 
+\usepackage[utf8]{inputenc} %utf8 % lettere accentate da tastiera
+\usepackage[english]{babel} % lingua del documento
+\usepackage[T1]{fontenc} % codifica dei font
+
+\usepackage{multirow} % Multirow is for tables with multiple rows within one 
+%cell.
+\usepackage{booktabs} % For even nicer tables.
+
+\usepackage{graphicx} 
+
+\usepackage{setspace}
+\setlength{\parindent}{0in}
+
+\usepackage{float}
+
+\usepackage{fancyhdr}
+
+\usepackage{caption}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{color}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage{csquotes}
+\usepackage{subfigure}
+
+\newcommand{\footlabel}[2]{%
+	\addtocounter{footnote}{1}%
+	\footnotetext[\thefootnote]{%
+		\addtocounter{footnote}{-1}%
+		\refstepcounter{footnote}\label{#1}%
+		#2%
+	}%
+	$^{\ref{#1}}$%
+}
+
+\newcommand{\footref}[1]{%
+	$^{\ref{#1}}$%
+}
+
+\pagestyle{fancy}
+
+\setlength\parindent{24pt}
+
+\fancyhf{}
+
+\lhead{\footnotesize Deep Learning Lab: Assignment 2}
+
+\rhead{\footnotesize Giorgia Adorni}
+
+\cfoot{\footnotesize \thepage} 
+
+\begin{document}
+	
+
+	\thispagestyle{empty}  
+	\noindent{
+	\begin{tabular}{p{15cm}} 
+		{\large \bf Deep Learning Lab} \\
+		Università della Svizzera Italiana \\ Faculty of Informatics \\ \today  \\
+		\hline
+		\\
+	\end{tabular} 
+	
+	\vspace*{0.3cm} 
+	
+	\begin{center}
+		{\Large \bf Assignment 3: Long Short-Term Memory Network}
+		\vspace{2mm}
+		
+		{\bf Giorgia Adorni (giorgia.adorni@usi.ch)}
+		
+	\end{center}  
+}
+	\vspace{0.4cm}
+
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	\section{Introduction}
+	
+	\section{Preprocessing}
+	
+	\section{Truncated backpropagation through time}
+	
+	\section{Evolution of the training loss function}
+	
+	\section{Generate and document 20 sequences}
+	
+	\section{Improvement of the model}
+	
+	\section{New network implementation}
+	
+	
+
+\end{document}
