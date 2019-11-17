@@ -48,11 +48,39 @@ def generate_batches(input, batch_size, sequence_length, k):
     return batches
 
 
+def create_network(hidden_units, num_layer, batch_size, X):
+    """
+
+    :param hidden_units:
+    :param num_layer:
+    :param batch_size:
+    :param X:
+    :return:
+    """
+    cell = tf.nn.rnn_cell.LSTMCell(num_units=hidden_units)
+    multi_cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layer, state_is_tuple=True)
+    init_state = multi_cell.zero_state(batch_size, dtype=tf.float32)
+
+    # rnn_outputs
+    rnn_outputs, final_state = tf.nn.dynamic_rnn(multi_cell, X, sequence_length=sequence_length,
+                                                 initial_state=init_state)
+    # rnn_outputs_flat
+    rnn_outputs_flat = tf.reshape(rnn_outputs, [-1, hidden_units])
+
+    # Weights and biases for the output layer
+    Wout = tf.Variable(tf.truncated_normal(shape=(hidden_units, 2), stddev=0.1))
+    bout = tf.Variable(tf.zeros(shape=[2]))
+    Z = tf.matmul(rnn_outputs_flat, Wout) + bout
+    Y_flat = tf.reshape(Y, [-1, 2])
+
+    return Z, Y_flat
+
+
 ########################################################################################################################
 
 
 # Download a large book from Project Gutenberg in plain English text
-download = False
+download = True
 book = 'TheCountOfMonteCristo.txt'
 
 if download:
@@ -104,4 +132,33 @@ with open(book, "r", encoding='utf-8') as reader:
 
     print(X_batches, Y_batches)
 
+
+# You may use a MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
+hidden_units = sequence_length
+num_layer = 2
+
+Z, Y_flat = create_network(hidden_units, num_layer, batch_size, X)
+
+# Training would take at least 5 epochs with a learning rate of 10^-2
+epochs = 5
+learning_rate = 1e-2
+
+# Creates a mask to disregard padding
+mask = tf.sequence_mask(sequence_length, dtype=tf.float32)
+mask = tf.reshape(mask, [-1])
+
+# Network prediction
+pred = tf.argmax(Z, axis=1) * tf.cast(mask, dtype=tf.int64)
+pred = tf.reshape(pred, [-1, max_len]) # shape: (batch_size, max_len)
+hits = tf.reduce_sum(tf.cast(tf.equal(pred, Y_int), tf.float32))
+hits = hits - tf.reduce_sum(1 - mask) # Disregards padding
+
+# Accuracy: correct predictions divided by total predictions
+accuracy = hits/tf.reduce_sum(mask)
+
+# Loss definition (masking to disregard padding)
+loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y_flat, logits=Z)
+loss = tf.reduce_sum(loss*mask)/tf.reduce_sum(mask)
+optimizer = tf.train.AdamOptimizer(learning_rate)
+train = optimizer.minimize(loss)
 
