@@ -7,7 +7,46 @@ import tensorflow as tf
 import requests
 import collections
 
-# Download a large book from Project Gutenberg in plain English text
+
+def generate_batches(input, batch_size, sequence_length, counter):
+    """
+    The text is too long to allow backpropagation through time, so it must be broken down into smaller sequences.
+    In order to allow backpropagation for a batch of sequences, the text may first be broken down into a number of
+    large blocks, which corresponds to the batch size.
+
+    Each of these blocks may be broken down further into subsequences, such that batch i contains the i-th subsequence
+    of each block.
+    During training, batches must be presented in order, and the state corresponding to each block must be preserved
+    across batches.
+    The technique described above is called truncated backpropagation through time.
+    :param text: input sequence
+    :param batch_size: number of blocks/batches in which divided the text
+    :param sequence_length: the length of each subsequence of a block
+    :param counter:
+    :return batches: return the list of batches
+    """
+    block_length = input.shape[0] // batch_size
+    batches = np.array([]).reshape([0, batch_size, sequence_length, counter])
+
+    for i in range(0, block_length, sequence_length):
+        batch = np.array([]).reshape([0, sequence_length, counter])
+        append = False
+        for j in range(batch_size):
+            start = j * block_length + i
+            end = min(start + sequence_length, j * block_length + block_length)
+
+            sequence = input[np.newaxis, start:end, :]
+
+            if sequence.shape[1] == sequence_length:
+                append = True
+                batch = np.append(batch, sequence, axis=0)
+
+        if append:
+            batch = batch[np.newaxis, :, :, :]
+            batches = np.append(batches, batch, axis=0)
+
+    return batches
+
 
 download = False
 book = 'TheCountOfMonteCristo.txt'
