@@ -25,25 +25,11 @@ def generate_batches(input, batch_size, sequence_length, k):
     :param k:
     :return batches: return the list of batches
     """
-    block_length = input.shape[0] // batch_size
-    batches = np.array([]).reshape([0, batch_size, sequence_length, k])
+    mask = input.shape[0] - (input.shape[0] % (16 * 256))
+    cropped_input = input[:mask, ...]
 
-    for i in range(0, block_length, sequence_length):
-        batch = np.array([]).reshape([0, sequence_length, k])
-        append = False
-        for j in range(batch_size):
-            start = j * block_length + i
-            end = min(start + sequence_length, j * block_length + block_length)
-
-            sequence = input[np.newaxis, start:end, :]
-
-            if sequence.shape[1] == sequence_length:
-                append = True
-                batch = np.append(batch, sequence, axis=0)
-
-        if append:
-            batch = batch[np.newaxis, :, :, :]
-            batches = np.append(batches, batch, axis=0)
+    blocks = np.reshape(cropped_input, [batch_size, -1, sequence_length, k])
+    batches = np.swapaxes(blocks, 0, 1)
 
     return batches
 
