@@ -34,32 +34,55 @@ def generate_batches(input, batch_size, sequence_length, k):
     return batches
 
 
-def create_network(hidden_units, num_layer, batch_size, X):
+def create_network(hidden_units, num_layer, X, init_state):
     """
-
+    MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
     :param hidden_units:
     :param num_layer:
-    :param batch_size:
     :param X:
-    :return:
+    :param init_state:
+    :return Z, Y_flat:
     """
-    cell = tf.nn.rnn_cell.LSTMCell(num_units=hidden_units)
-    multi_cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layer, state_is_tuple=True)
-    init_state = multi_cell.zero_state(batch_size, dtype=tf.float32)
 
-    # rnn_outputs
+    batch_size = X.shape[0]
+    sequence_length = X.shape[1]
+    k = X.shape[2]
+
+    cell = tf.nn.rnn_cell.LSTMCell(num_units=hidden_units)
+    multi_cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layer)
+    # multi_cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layer, state_is_tuple=True)
+
+    if init_state == None:
+        init_state = multi_cell.zero_state(batch_size, dtype=tf.float32)
+
+    # FIXME final state never used
     rnn_outputs, final_state = tf.nn.dynamic_rnn(multi_cell, X, sequence_length=sequence_length,
                                                  initial_state=init_state)
-    # rnn_outputs_flat
-    rnn_outputs_flat = tf.reshape(rnn_outputs, [-1, hidden_units])
 
-    # Weights and biases for the output layer
-    Wout = tf.Variable(tf.truncated_normal(shape=(hidden_units, 2), stddev=0.1))
-    bout = tf.Variable(tf.zeros(shape=[2]))
-    Z = tf.matmul(rnn_outputs_flat, Wout) + bout
-    Y_flat = tf.reshape(Y, [-1, 2])
+    # rnn_outputs_flat = tf.reshape(rnn_outputs, [-1, hidden_units])
 
-    return Z, Y_flat
+    # softmax output layer with k units
+    # FIXME: hidden_units, 2   (2 is ot size)
+    W = tf.Variable(tf.truncated_normal(shape=(hidden_units, k), stddev=0.1), name='W')
+    b = tf.Variable(tf.zeros(shape=[k]), name='b')
+
+    Z = tf.matmul(rnn_outputs, W) + b
+
+    return Z, final_state
+
+
+def net_param(hidden_units, num_layer, learning_rate, X, Y, init_state):
+    Z, final_state = create_network(hidden_units, num_layer, X, init_state)
+
+    # Loss function
+    loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y, logits=Z)
+    loss = tf.reduce_mean(loss, name='loss')
+
+    # Optimiser
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+    train = optimizer.minimize(loss)
+
+    return Z, final_state, loss, train
 
 
 ########################################################################################################################
