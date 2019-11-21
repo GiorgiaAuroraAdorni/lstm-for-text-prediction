@@ -3,9 +3,10 @@
 # LSTM
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import requests
 import collections
+import time
 
 
 def generate_batches(input, batch_size, sequence_length, k):
