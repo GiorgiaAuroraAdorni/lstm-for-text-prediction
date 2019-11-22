@@ -7,6 +7,79 @@ import tensorflow.compat.v1 as tf
 import requests
 import collections
 import time
+import pandas as pd
+import os
+
+
+def check_dir(dir):
+    """
+
+    :param dir:
+    """
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+
+def save_statistics(dir, char_to_int, abs_freq, rel_freq):
+    """
+
+    :param dir:
+    :param char_to_int:
+    :param abs_freq:
+    :param rel_freq:
+    :return df:
+    """
+    idx = np.array(list(char_to_int.values()))
+    chars = np.array(list(char_to_int.keys()))
+    abs_freqs = np.array(list(abs_freq.values()))
+    rel_freqs = np.array(list(rel_freq.values())) * 100
+    rel_freqs_print = np.array([str(np.round(i, 3)) + '%' for i in rel_freqs])
+
+    data = {'Encoding': idx,
+            'Character': chars,
+            'Absolute Frequence': abs_freqs,
+            'Relative Frequence': rel_freqs_print}
+
+    # Convert the dictionary into DataFrame
+    df = pd.DataFrame(data)
+    df = df.set_index('Encoding')
+    df = df.sort_values(by=['Absolute Frequence'], ascending=False)
+
+    check_dir(dir)
+    with open(dir + 'mytable.tex', 'w') as latex_table:
+        latex_table.write(df.to_latex())
+
+    return df
+
+
+def preprocessing(input):
+    """
+    Convert characters to lower case, dount the number of unique characters and the frequency of each character,
+    choose one integer to represent each character and save the statistics in a LaTeX table.
+    :param input: input text
+    :return char_to_int, int_to_char, encoded_input, k: two dictionaries to map characters to int and int to chars,
+    the encoded input and the number of unique characters.
+    """
+
+    input = input.lower()
+
+    input = np.array([c for c in input])
+    abs_freq = collections.Counter(input)
+    k = len(abs_freq)
+    abs_freq = collections.OrderedDict(abs_freq)
+    rel_freq = {key: value / len(input) for key, value in abs_freq.items()}
+
+    char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
+    int_to_char = {idx: key for idx, key in enumerate(abs_freq)}
+
+    encoded_input = [char_to_int[char] for char in input]
+
+    print(k)
+    dir = 'out/'
+    df = save_statistics(dir, char_to_int, abs_freq, rel_freq)
+    print(df)
+
+    return char_to_int, int_to_char, encoded_input, k
 
 
 def generate_batches(input, batch_size, sequence_length, k):
@@ -103,42 +176,28 @@ if download:
 with open(book, "r", encoding='utf-8') as reader:
     input = reader.read()
 
-    # Convert characters to lower case
-    input = input.lower()
-
-    # Count the number of unique characters and the frequency of each character
-    input = np.array([c for c in input])
-    abs_freq = collections.Counter(input)
-    k = len(abs_freq)
-    abs_freq = collections.OrderedDict(abs_freq)
-    rel_freq = {key: value / len(input) for key, value in abs_freq.items()}
-
-    print(k)
-    print(abs_freq)
-    print(rel_freq)
-
-    # Choose one integer to represent each character
-    char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
-    int_to_char = {idx: key for idx, key in enumerate(abs_freq)}
-
-    encoded_input = [char_to_int[char] for char in input]
+    # preprocess data
+    char_to_int, int_to_char, encoded_input, k = preprocessing(input)
 
     # One-hot encoding
     one_hot = tf.one_hot(encoded_input, depth=k)
     X = one_hot[:-1]
     Y = one_hot[1:]
 
-    session = tf.Session()
-    session.run(tf.global_variables_initializer())
+    # Avoid allocating all GPU memory upfront.
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
 
-    new_X, new_Y = session.run([X, Y])
+    session = tf.Session(config=config)
+    session.run(tf.global_variables_initializer())
 
     # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
     batch_size = 16
     sequence_length = 256
 
-    X_batches = generate_batches(new_X, batch_size, sequence_length, k)
-    Y_batches = generate_batches(new_Y, batch_size, sequence_length, k)
+    # batches.shape: (646, 16, 256, 106)=(n_batches, n_blocks, seq_len, k)
+    X_batches = generate_batches(session.run(X), batch_size, sequence_length, k)
+    Y_batches = generate_batches(session.run(Y), batch_size, sequence_length, k)
 
     print(X_batches, Y_batches)
 
