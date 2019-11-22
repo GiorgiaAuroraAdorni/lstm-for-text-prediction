@@ -108,62 +108,67 @@ def generate_batches(input, batch_size, sequence_length, k):
     return batches
 
 
-def create_network(hidden_units, num_layer, X, init_state):
+def create_network(hidden_units, num_layers, X, S):
     """
     MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
     :param hidden_units:
     :param num_layer:
-    :param X:
-    :param init_state:
-    :return Z, Y_flat:
+    :param X: input
+    :param S: previous or initial state
+    :return Z, state:
     """
+    k = tf.shape(X)[2]
 
-    batch_size = X.shape[0]
-    sequence_length = X.shape[1]
-    k = X.shape[2]
+    cell = [tf.nn.rnn_cell.LSTMCell(num_units=n_units) for n_units in hidden_units]
+    multi_cell = tf.nn.rnn_cell.MultiRNNCell(cell)
 
-    cell = tf.nn.rnn_cell.LSTMCell(num_units=hidden_units)
-    multi_cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layer)
-    # multi_cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layer, state_is_tuple=True)
+    l = tf.unstack(S, axis=0)
+    rnn_tuple_state = tuple([tf.nn.rnn_cell.LSTMStateTuple(l[idx][0], l[idx][1]) for idx in range(num_layers)])
 
-    if init_state == None:
-        init_state = multi_cell.zero_state(batch_size, dtype=tf.float32)
-
-    # FIXME final state never used
-    rnn_outputs, final_state = tf.nn.dynamic_rnn(multi_cell, X, sequence_length=sequence_length,
-                                                 initial_state=init_state)
-
+    rnn_outputs, state = tf.nn.dynamic_rnn(multi_cell, X, initial_state=rnn_tuple_state)
     # rnn_outputs_flat = tf.reshape(rnn_outputs, [-1, hidden_units])
 
     # softmax output layer with k units
-    # FIXME: hidden_units, 2   (2 is ot size)
-    W = tf.Variable(tf.truncated_normal(shape=(hidden_units, k), stddev=0.1), name='W')
-    b = tf.Variable(tf.zeros(shape=[k]), name='b')
+    s = rnn_outputs.shape.as_list()[-1]
 
+    W = tf.Variable(tf.truncated_normal(shape=(s, k), stddev=0.1), name='W')
+    b = tf.Variable(tf.zeros(shape=[k]), name='b')
     Z = tf.matmul(rnn_outputs, W) + b
 
-    return Z, final_state
+    return Z, state
 
 
-def net_param(hidden_units, num_layer, learning_rate, X, Y, init_state):
-    Z, final_state = create_network(hidden_units, num_layer, X, init_state)
+def net_param(hidden_units, learning_rate, num_layers):
+    """
 
-    # Loss function
-    loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y, logits=Z)
-    loss = tf.reduce_mean(loss, name='loss')
+    :param hidden_units:
+    :param learning_rate:
+    :param num_layers:
+    :return:
+    """
+    with tf.variable_scope("model_{}".format(1)):
+        X = tf.placeholder(tf.float32, [16, 256, 106], name='X')
+        Y = tf.placeholder(tf.float32, [16, 256, 106], name='Y')
+        S = tf.placeholder(tf.float32, [num_layers, 2, batch_size, hidden_units[0]], name='S')
 
-    # Optimiser
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    train = optimizer.minimize(loss)
+        Z, state = create_network(hidden_units, num_layers, X, S)
 
-    return Z, final_state, loss, train
+        # Loss function
+        loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y, logits=Z)
+        loss = tf.reduce_mean(loss, name='loss')
+
+        # Optimiser
+        optimizer = tf.train.AdamOptimizer(learning_rate)
+        train = optimizer.minimize(loss)
+
+    return X, Y, S, Z, state, loss, train
 
 
 ########################################################################################################################
 
 
 # Download a large book from Project Gutenberg in plain English text
-download = True
+download = False
 book = 'TheCountOfMonteCristo.txt'
 
 if download:
