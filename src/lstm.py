@@ -252,3 +252,5 @@ with open(book, "r", encoding='utf-8') as reader:
 
         print('Train Loss: {:.2f}. Train Time: {} sec.'.format(train_loss, train_time))
         f_train.write(str(epochs) + ', ' + str(train_loss) + ',' + str(train_time) + '\n')
+
+    f_train.close()

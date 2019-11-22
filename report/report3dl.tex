@@ -48,7 +48,7 @@
 
 \fancyhf{}
 
-\lhead{\footnotesize Deep Learning Lab: Assignment 2}
+\lhead{\footnotesize Deep Learning Lab: Assignment 3}
 
 \rhead{\footnotesize Giorgia Adorni}
 
@@ -82,8 +82,79 @@
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
 	\section{Introduction}
+	The goal of this project is to implement a text generator based on Long 
+	Short-Term Memory (LSTM).
+	
+	
 	
 	\section{Preprocessing}
+	First of all, the book \textit{The Count of Monte Cristo} has been  
+	downloaded in plain English text from Project Gutenberg.
+	
+	The first operation performed consists in an initial preprocessing and 
+	analysis of the data.
+	First of all, all the text characters have been converted to lower case. 
+	Soon after, the number of unique characters were counted as well as the 
+	absolute and relative frequency of each character. In total there are $106$ 
+	unique characters in the book.
+	
+	In order to train the network, it is necessary to map the text strings to a 
+	numerical representation. Hence, two dictionaries that act as lookup tables 
+	are created: one mapping characters to integer, and the other integers to 
+	characters. This will be crucial for the creation of a one-hot encoding.
+	
+	In Table \ref{tab:statistics} are presented the $30$ most frequent 
+	characters, with the corresponding encoding and frequency.
+	
+	\begin{figure}[H]
+	\centering
+	\begin{tabular}{llcc}
+		\toprule
+		Encoding & Character &  Absolute Frequence & Relative Frequence \\
+		\midrule
+		8        &           &              420940 &            15.901\% \\
+		5        &         e &              259094 &             9.787\% \\
+		7        &         t &              180542 &              6.82\% \\
+		21       &         a &              165546 &             6.253\% \\
+		3        &         o &              157076 &             5.933\% \\
+		18       &         i &              142302 &             5.375\% \\
+		11       &         n &              137584 &             5.197\% \\
+		14       &         s &              126590 &             4.782\% \\
+		15       &         h &              126368 &             4.773\% \\
+		2        &         r &              121407 &             4.586\% \\
+		24       &         d &               94099 &             3.554\% \\
+		22       &         l &               80730 &             3.049\% \\
+		0        &        \textbackslash n &               61739 &             
+		2.332\% \\
+		10       &         u &               60318 &             2.278\% \\
+		17       &         m &               57157 &             2.159\% \\
+		6        &         c &               52526 &             1.984\% \\
+		16       &         f &               45383 &             1.714\% \\
+		19       &         , &               45246 &             1.709\% \\
+		27       &         w &               43892 &             1.658\% \\
+		20       &         y &               42642 &             1.611\% \\
+		9        &         g &               35603 &             1.345\% \\
+		1        &         p &               34952 &              1.32\% \\
+		12       &         b &               27972 &             1.057\% \\
+		29       &         . &               21950 &             0.829\% \\
+		28       &         v &               21490 &             0.812\% \\
+		55       &         “ &               15712 &             0.594\% \\
+		57       &         ” &               15195 &             0.574\% \\
+		26       &         k &               12649 &             0.478\% \\
+		54       &         ; &                5993 &             0.226\% \\
+		56       &         ? &                4610 &             0.174\% \\
+		\dots       &         \dots &                \dots &             \dots 
+		\\
+		\bottomrule
+	\end{tabular}
+	\captionof{table}{Books Statistics.}
+	\label{tab:statistics}
+	\end{figure}
+
+	
+	The next step was the creation of a dictionary in which each integer 
+	represent each character. 
+	
 	
 	\section{Truncated backpropagation through time}
 	
@@ -92,6 +163,18 @@
 	\section{Generate and document 20 sequences}
 	
 	\section{Improvement of the model}
+	In the first model trained, also blanks and other noisy characters have 
+	been considered. It would be interesting to document the evolution of the 
+	training loss function of a model with a different preprocessing of data.
+	
+	%FIXME
+	In particular, could be interesting removing 
+	(think about removal of punctuation etc…)
+	greek sentence
+	
+	This kind of preprocessing of the text can be useful to generate more
+	interesting text 
+	
 	
 	\section{New network implementation}
 	
