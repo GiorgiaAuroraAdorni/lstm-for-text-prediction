@@ -204,35 +204,51 @@ with open(book, "r", encoding='utf-8') as reader:
     X_batches = generate_batches(session.run(X), batch_size, sequence_length, k)
     Y_batches = generate_batches(session.run(Y), batch_size, sequence_length, k)
 
-    print(X_batches, Y_batches)
+    # Training would take at least 5 epochs with a learning rate of 10^-2
+    hidden_units = [256, 256]
+    num_layers = 2
+    epochs = 5
+    learning_rate = 1e-2
 
+    # Create model and set parameter
+    X, Y, S, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers)
 
-# You may use a MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
-hidden_units = sequence_length
-num_layer = 2
+    session.run(tf.global_variables_initializer())
 
-Z, Y_flat = create_network(hidden_units, num_layer, batch_size, X)
+    f_train = open('train.txt', "w")
 
-# Training would take at least 5 epochs with a learning rate of 10^-2
-epochs = 5
-learning_rate = 1e-2
+    for e in range(0, epochs):
+        print('Epoch: {}.'.format(e))
 
-# Creates a mask to disregard padding
-mask = tf.sequence_mask(sequence_length, dtype=tf.float32)
-mask = tf.reshape(mask, [-1])
+        avg_loss = 0
 
-# Network prediction
-pred = tf.argmax(Z, axis=1) * tf.cast(mask, dtype=tf.int64)
-pred = tf.reshape(pred, [-1, max_len]) # shape: (batch_size, max_len)
-hits = tf.reduce_sum(tf.cast(tf.equal(pred, Y_int), tf.float32))
-hits = hits - tf.reduce_sum(1 - mask) # Disregards padding
+        print("Starting train…")
+        train_start = time.time()
 
-# Accuracy: correct predictions divided by total predictions
-accuracy = hits/tf.reduce_sum(mask)
+        for i in range(X_batches.shape[0]):
+            # Train
+            # FIXME: S, state
+            init_state = np.zeros((2, 2, batch_size, hidden_units[0]))
 
-# Loss definition (masking to disregard padding)
-loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y_flat, logits=Z)
-loss = tf.reduce_sum(loss*mask)/tf.reduce_sum(mask)
-optimizer = tf.train.AdamOptimizer(learning_rate)
-train = optimizer.minimize(loss)
+            if i == 0:
+                train_loss, _, current_state = session.run([loss, train, state], feed_dict={X: X_batches[i],
+                                                                                            Y: Y_batches[i],
+                                                                                            S: init_state})
+                n_state = np.array(current_state)
 
+            else:
+                train_loss, _, current_state = session.run([loss, train, state], feed_dict={X: X_batches[i],
+                                                                                            Y: Y_batches[i],
+                                                                                            S: n_state})
+                current_state = np.array(state)
+
+            avg_loss += train_loss
+            print('batch: ' + str(i) + '\n\tloss: ' + str(train_loss))
+
+        train_loss = avg_loss / X_batches.shape[0]
+
+        train_end = time.time()
+        train_time = train_end - train_start
+
+        print('Train Loss: {:.2f}. Train Time: {} sec.'.format(train_loss, train_time))
+        f_train.write(str(epochs) + ', ' + str(train_loss) + ',' + str(train_time) + '\n')
