@@ -225,22 +225,12 @@ with open(book, "r", encoding='utf-8') as reader:
         print("Starting train…")
         train_start = time.time()
 
+        current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
+
         for i in range(X_batches.shape[0]):
             # Train
-            # FIXME: S, state
-            init_state = np.zeros((2, 2, batch_size, hidden_units[0]))
-
-            if i == 0:
-                train_loss, _, current_state = session.run([loss, train, state], feed_dict={X: X_batches[i],
-                                                                                            Y: Y_batches[i],
-                                                                                            S: init_state})
-                n_state = np.array(current_state)
-
-            else:
-                train_loss, _, current_state = session.run([loss, train, state], feed_dict={X: X_batches[i],
-                                                                                            Y: Y_batches[i],
-                                                                                            S: n_state})
-                current_state = np.array(state)
+            train_loss, _, current_state = session.run([loss, train, state],
+                                                       feed_dict={X: X_batches[i], Y: Y_batches[i], S: current_state})
 
             avg_loss += train_loss
             print('batch: ' + str(i) + '\n\tloss: ' + str(train_loss))
