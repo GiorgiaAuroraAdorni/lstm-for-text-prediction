@@ -286,12 +286,12 @@ with open(book, "r", encoding='utf-8') as reader:
 
     X, Y = one_hot_batches(encoded_input, k)
 
-    # Avoid allocating all GPU memory upfront.
+    # Create session and create configuration to avoid allocating all GPU memory upfront.
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
     session = tf.Session(config=config)
-    session.run(tf.global_variables_initializer())
+    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
 
     # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
     batch_size = 16
@@ -308,14 +308,9 @@ with open(book, "r", encoding='utf-8') as reader:
     epochs = 5
     learning_rate = 1e-2
 
-    # Sequence to be generated
-    num_sequence = 20
-    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
     # Create model and set parameter
     X, Y, S, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers)
-
     session.run(tf.global_variables_initializer())
-
 
     f_train = open('out/train.txt', "w")
 
@@ -330,7 +325,9 @@ with open(book, "r", encoding='utf-8') as reader:
         for i in range(X_batches.shape[0]):
             # Train
             train_loss, _, current_state, output = session.run([loss, train, state, Z],
-                                                       feed_dict={X: X_batches[i], Y: Y_batches[i], S: current_state})
+                                                               feed_dict={X: X_batches[i],
+                                                                          Y: Y_batches[i],
+                                                                          S: current_state})
 
             cum_loss += train_loss
             print('batch: ' + str(i) + '\n\tloss: ' + str(train_loss))
@@ -343,5 +340,16 @@ with open(book, "r", encoding='utf-8') as reader:
         print('Train Loss: {:.2f}. Train Time: {} sec.'.format(train_loss, train_time))
         f_train.write(str(e) + ', ' + str(train_loss) + ',' + str(train_time) + '\n')
 
-
     f_train.close()
+
+    saver = tf.train.Saver()
+    saver.save(session, 'train/')
+
+    # Generate 20 sequences composed of 256 characters to evaluate the network
+    num_sequence = 20
+    seq_length = 256
+
+    f_generation = open('out/generation.txt', "w")
+    sequences = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation)
+
+    f_generation.close()
