@@ -52,7 +52,7 @@ def save_statistics(dir, char_to_int, abs_freq, rel_freq):
     return df
 
 
-def preprocessing(input):
+def create_dicts(input, statistics=False):
     """
     Convert characters to lower case, dount the number of unique characters and the frequency of each character,
     choose one integer to represent each character and save the statistics in a LaTeX table.
@@ -72,14 +72,33 @@ def preprocessing(input):
     char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
     int_to_char = {idx: key for idx, key in enumerate(abs_freq)}
 
+    print(k)
+    if statistics:
+        dir = 'out/'
+        df = save_statistics(dir, char_to_int, abs_freq, rel_freq)
+        print(df)
+
+    return input, char_to_int, int_to_char, k, abs_freq, rel_freq
+
+
+def preprocessing(char_to_int, input):
+    """
+
+    :param char_to_int:
+    :param input:
+    :return:
+    """
     encoded_input = [char_to_int[char] for char in input]
 
-    print(k)
-    dir = 'out/'
-    df = save_statistics(dir, char_to_int, abs_freq, rel_freq)
-    print(df)
+    return encoded_input
 
-    return char_to_int, int_to_char, encoded_input, k
+
+def one_hot_batches(encoded_input, k):
+    one_hot = tf.one_hot(encoded_input, depth=k)
+    X = one_hot[:-1]
+    Y = one_hot[1:]
+
+    return X, Y
 
 
 def generate_batches(input, batch_size, sequence_length, k):
@@ -182,12 +201,11 @@ with open(book, "r", encoding='utf-8') as reader:
     input = reader.read()
 
     # preprocess data
-    char_to_int, int_to_char, encoded_input, k = preprocessing(input)
+    input, char_to_int, int_to_char, k, abs_freq, rel_freq = create_dicts(input, statistics=True)
 
-    # One-hot encoding
-    one_hot = tf.one_hot(encoded_input, depth=k)
-    X = one_hot[:-1]
-    Y = one_hot[1:]
+    encoded_input = preprocessing(char_to_int, input)
+
+    X, Y = one_hot_batches(encoded_input, k)
 
     # Avoid allocating all GPU memory upfront.
     config = tf.ConfigProto()
@@ -200,9 +218,10 @@ with open(book, "r", encoding='utf-8') as reader:
     batch_size = 16
     sequence_length = 256
 
-    # batches.shape: (646, 16, 256, 106)=(n_batches, n_blocks, seq_len, k)
+    # batches.shape: (646, 16, 256, 106)=(batch_size, n_blocks, sequence_length, vocab_size)
     X_batches = generate_batches(session.run(X), batch_size, sequence_length, k)
     Y_batches = generate_batches(session.run(Y), batch_size, sequence_length, k)
+    print('Generated training batches')
 
     # Training would take at least 5 epochs with a learning rate of 10^-2
     hidden_units = [256, 256]
@@ -210,6 +229,9 @@ with open(book, "r", encoding='utf-8') as reader:
     epochs = 5
     learning_rate = 1e-2
 
+    # Sequence to be generated
+    num_sequence = 20
+    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
     # Create model and set parameter
     X, Y, S, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers)
 
