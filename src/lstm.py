@@ -12,19 +12,19 @@ import requests
 import tensorflow.compat.v1 as tf
 
 
-def check_dir(dir):
+def check_dir(directory):
     """
 
-    :param dir:
+    :param directory: path to the directory
     """
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
 
-def save_statistics(dir, char_to_int, abs_freq, rel_freq):
+def save_statistics(directory, char_to_int, abs_freq, rel_freq):
     """
 
-    :param dir:
+    :param directory:
     :param char_to_int:
     :param abs_freq:
     :param rel_freq:
@@ -46,51 +46,40 @@ def save_statistics(dir, char_to_int, abs_freq, rel_freq):
     df = df.set_index('Encoding')
     df = df.sort_values(by=['Absolute Frequence'], ascending=False)
 
-    check_dir(dir)
-    with open(dir + 'mytable.tex', 'w') as latex_table:
+    check_dir(directory)
+    with open(directory + 'mytable.tex', 'w') as latex_table:
         latex_table.write(df.to_latex())
 
     return df
 
 
-def create_dicts(input, statistics=False):
+def create_dicts(input_string, statistics=False):
     """
     Convert characters to lower case, dount the number of unique characters and the frequency of each character,
     choose one integer to represent each character and save the statistics in a LaTeX table.
-    :param input: input text
+    :param input_string: input text
+    :param statistics:
     :return char_to_int, int_to_char, encoded_input, k: two dictionaries to map characters to int and int to chars,
     the encoded input and the number of unique characters.
     """
-    input = input.lower()
+    input_string = input_string.lower()
 
-    input = np.array([c for c in input])
-    abs_freq = collections.Counter(input)
+    input_string = np.array([c for c in input_string])
+    abs_freq = collections.Counter(input_string)
     k = len(abs_freq)
     abs_freq = collections.OrderedDict(abs_freq)
-    rel_freq = {key: value / len(input) for key, value in abs_freq.items()}
+    rel_freq = {key: value / len(input_string) for key, value in abs_freq.items()}
 
     char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
     int_to_char = {idx: key for idx, key in enumerate(abs_freq)}
 
     print(k)
     if statistics:
-        dir = 'out/'
-        df = save_statistics(dir, char_to_int, abs_freq, rel_freq)
+        directory = 'out/'
+        df = save_statistics(directory, char_to_int, abs_freq, rel_freq)
         print(df)
 
-    return input, char_to_int, int_to_char, k, abs_freq, rel_freq
-
-
-def preprocessing(char_to_int, input):
-    """
-
-    :param char_to_int:
-    :param input:
-    :return:
-    """
-    encoded_input = [char_to_int[char] for char in input]
-
-    return encoded_input
+    return input_string, char_to_int, int_to_char, k, abs_freq, rel_freq
 
 
 def one_hot_batches(encoded_input, k):
@@ -101,7 +90,7 @@ def one_hot_batches(encoded_input, k):
     return X, Y
 
 
-def generate_batches(input, batch_size, sequence_length, k):
+def generate_batches(one_hot_input, batch_size, sequence_length, k):
     """
     The text is too long to allow backpropagation through time, so it must be broken down into smaller sequences.
     In order to allow backpropagation for a batch of sequences, the text may first be broken down into a number of
@@ -112,17 +101,17 @@ def generate_batches(input, batch_size, sequence_length, k):
     During training, batches must be presented in order, and the state corresponding to each block must be preserved
     across batches.
     The technique described above is called truncated backpropagation through time.
-    :param input: input sequence (shape: (1))
+    :param one_hot_input: input sequence (shape: (1))
     :param batch_size: number of blocks/batches in which divided the text
     :param sequence_length: the length of each subsequence of a block
     :param k:
     :return batches: return the list of batches
     """
     mod = 16 * 256
-    input_dim = input.shape[0]
+    input_dim = one_hot_input.shape[0]
 
     missing = mod - (input_dim % mod)
-    padded_input = np.pad(input, [(0, missing), (0, 0)], mode='constant')
+    padded_input = np.pad(one_hot_input, [(0, missing), (0, 0)], mode='constant')
     mask = np.concatenate([np.ones(input_dim), np.zeros(missing)])
 
     blocks = np.reshape(padded_input, [batch_size, -1, sequence_length, k])
@@ -138,9 +127,10 @@ def create_network(hidden_units, num_layers, X, S, mask):
     """
     MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
     :param hidden_units:
-    :param num_layer:
+    :param num_layers:
     :param X: input
     :param S: previous or initial state
+    :param mask:
     :return Z, state:
     """
     k = tf.shape(X)[2]
@@ -148,11 +138,15 @@ def create_network(hidden_units, num_layers, X, S, mask):
     cell = [tf.nn.rnn_cell.LSTMCell(num_units=n_units) for n_units in hidden_units]
     multi_cell = tf.nn.rnn_cell.MultiRNNCell(cell)
 
-    l = tf.unstack(S, axis=0)
-    rnn_tuple_state = tuple([tf.nn.rnn_cell.LSTMStateTuple(l[idx][0], l[idx][1]) for idx in range(num_layers)])
+    state_list = tf.unstack(S, axis=0)
+    rnn_tuple_state = tuple([tf.nn.rnn_cell.LSTMStateTuple(state_list[idx][0], state_list[idx][1])
+                             for idx in range(num_layers)])
 
     sequence_length = tf.reduce_sum(mask, axis=1)
-    rnn_outputs, state = tf.nn.dynamic_rnn(multi_cell, X, initial_state=rnn_tuple_state, sequence_length=sequence_length)
+    rnn_outputs, state = tf.nn.dynamic_rnn(multi_cell,
+                                           X,
+                                           initial_state=rnn_tuple_state,
+                                           sequence_length=sequence_length)
 
     # softmax output layer with k units
     W = tf.Variable(tf.truncated_normal(shape=(hidden_units[0], k), stddev=0.1), name='W')
@@ -162,12 +156,13 @@ def create_network(hidden_units, num_layers, X, S, mask):
     return Z, state
 
 
-def net_param(hidden_units, learning_rate, num_layers):
+def net_param(hidden_units, learning_rate, num_layers, batch_size):
     """
 
     :param hidden_units:
     :param learning_rate:
     :param num_layers:
+    :param batch_size:
     :return:
     """
     with tf.variable_scope("model_{}".format(1)):
@@ -189,7 +184,7 @@ def net_param(hidden_units, learning_rate, num_layers):
     return X, Y, S, M, Z, state, loss, train
 
 
-def net_param_generation():
+def net_param_generation(hidden_units, num_layers):
     """
 
     :return S, X, Z, state:
@@ -204,7 +199,8 @@ def net_param_generation():
     return S, X, Z, state
 
 
-def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation):
+def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation, hidden_units,
+                       num_layers, config):
     """
 
     :param int_to_char:
@@ -213,6 +209,9 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     :param seq_length:
     :param rel_freq:
     :param f_generation:
+    :param hidden_units:
+    :param num_layers:
+    :param config:
     :return char_generated:
     """
     tf.reset_default_graph()
@@ -227,15 +226,15 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
         initial_chars += char
 
     # Preprocess the input of the network
-    encoded_input = preprocessing(char_to_int, initial_chars)
+    encoded_input = [char_to_int[char] for char in initial_chars]
     one_hot = tf.one_hot(encoded_input, depth=k)
 
     one_hot = session2.run(one_hot)
 
-    input = np.expand_dims(one_hot, axis=1)
+    one_hot_input = np.expand_dims(one_hot, axis=1)
 
     # Initialise and restore the network
-    S, X, Z, state = net_param_generation()
+    S, X, Z, state = net_param_generation(hidden_units, num_layers)
 
     Z_flat = tf.squeeze(Z)
     Z_indices = tf.random.categorical(Z_flat, num_samples=1)
@@ -253,17 +252,17 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     current_state = np.zeros((2, 2, num_sequence, hidden_units[0]))
 
     for j in range(seq_length):
-        current_state, output = session2.run([state, Z_indices], feed_dict={X: input, S: current_state})
+        current_state, output = session2.run([state, Z_indices], feed_dict={X: one_hot_input, S: current_state})
 
         output = [int_to_char[s] for s in output.ravel()]
 
         sequences[:, j] = output
 
-        encoded_input = preprocessing(char_to_int, output)
+        encoded_input = [char_to_int[char] for char in output]
         one_hot = tf.one_hot(encoded_input, depth=k)
         one_hot = session2.run(one_hot)
 
-        input = np.expand_dims(one_hot, axis=1)
+        one_hot_input = np.expand_dims(one_hot, axis=1)
 
     gen_end = time.time()
     gen_time = gen_end - gen_start
@@ -272,103 +271,106 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     print('Generation Time: {} sec.'.format(gen_time))
 
     for idx, seq in enumerate(sequences):
-        print('Sequence ', str(idx + 1), ': ', seq, '\n')
         seq = ''.join(seq)
+        print('Sequence ', str(idx + 1), ': ', seq, '\n')
         f_generation.write('Sequence {}, {}\n'.format(idx + 1, seq))
 
     return sequences
 
 
-########################################################################################################################
+def main():
+    # Download a large book from Project Gutenberg in plain English text
+    download = False
+    book = 'TheCountOfMonteCristo.txt'
+
+    if download:
+        url = 'http://www.gutenberg.org/files/1184/1184-0.txt'
+        r = requests.get(url, allow_redirects=True)
+
+        with open(book, 'wb') as text_file:
+            text_file.write(r.content)
+
+    with open(book, "r", encoding='utf-8') as reader:
+        input_string = reader.read()
+
+        # preprocess data
+        input_string, char_to_int, int_to_char, k, abs_freq, rel_freq = create_dicts(input_string, statistics=True)
+
+        encoded_input = [char_to_int[char] for char in input_string]
+        X, Y = one_hot_batches(encoded_input, k)
+
+        # Create session and create configuration to avoid allocating all GPU memory upfront.
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+
+        session = tf.Session(config=config)
+        writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
+
+        # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
+        batch_size = 16
+        sequence_length = 256
+
+        # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
+        X_batches, mask = generate_batches(session.run(X), batch_size, sequence_length, k)
+        Y_batches, _ = generate_batches(session.run(Y), batch_size, sequence_length, k)
+        print('Generated training batches.')
+
+        # Training would take at least 5 epochs with a learning rate of 10^-2
+        hidden_units = [256, 256]
+        num_layers = 2
+        epochs = 5
+        learning_rate = 1e-2
+
+        # Create model and set parameter
+        X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size)
+        session.run(tf.global_variables_initializer())
+
+        f_train = open('out/train.txt', "w")
+
+        for e in range(0, epochs):
+            print("Starting train…")
+            train_start = time.time()
+            print('Epoch: {}.'.format(e))
+
+            cum_loss = 0
+            cum_sum = 0
+            current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
+
+            for i in range(X_batches.shape[0]):
+                batch_loss, _, current_state, output = session.run([loss, train, state, Z], feed_dict={X: X_batches[i],
+                                                                                                       Y: Y_batches[i],
+                                                                                                       S: current_state,
+                                                                                                       M: mask[i]})
+
+                cum_sum += np.sum(mask[i])
+                cum_loss += batch_loss * np.sum(mask[i])
+                print('Batch: ' + str(i) + '\tLoss: ' + str(batch_loss))
+
+            epoch_loss = cum_loss / cum_sum
+
+            train_end = time.time()
+            train_time = train_end - train_start
+
+            print('Train Loss: {:.2f}. Train Time: {} sec.'.format(epoch_loss, train_time))
+            f_train.write(str(e) + ', ' + str(epoch_loss) + ',' + str(train_time) + '\n')
+
+        f_train.close()
+
+        saver = tf.train.Saver()
+        saver.save(session, 'train/')
+
+        # Generate 20 sequences composed of 256 characters to evaluate the network
+        num_sequence = 20
+        seq_length = 256
+
+        f_generation = open('out/generation.txt', "w")
+        _ = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation,
+                               hidden_units, num_layers, config)
+
+        f_generation.close()
+
+        writer.close()
 
 
-# Download a large book from Project Gutenberg in plain English text
-download = False
-book = 'TheCountOfMonteCristo.txt'
-
-if download:
-    url = 'http://www.gutenberg.org/files/1184/1184-0.txt'
-    r = requests.get(url, allow_redirects=True)
-
-    with open(book, 'wb') as text_file:
-        text_file.write(r.content)
-
-with open(book, "r", encoding='utf-8') as reader:
-    input = reader.read()
-
-    # preprocess data
-    input, char_to_int, int_to_char, k, abs_freq, rel_freq = create_dicts(input, statistics=True)
-
-    encoded_input = preprocessing(char_to_int, input)
-
-    X, Y = one_hot_batches(encoded_input, k)
-
-    # Create session and create configuration to avoid allocating all GPU memory upfront.
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-
-    session = tf.Session(config=config)
-    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
-
-    # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
-    batch_size = 16
-    sequence_length = 256
-
-    # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
-    X_batches, mask = generate_batches(session.run(X), batch_size, sequence_length, k)
-    Y_batches, _ = generate_batches(session.run(Y), batch_size, sequence_length, k)
-    print('Generated training batches.')
-
-    # Training would take at least 5 epochs with a learning rate of 10^-2
-    hidden_units = [256, 256]
-    num_layers = 2
-    epochs = 5
-    learning_rate = 1e-2
-
-    # Create model and set parameter
-    X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers)
-    session.run(tf.global_variables_initializer())
-
-    f_train = open('out/train.txt', "w")
-
-    for e in range(0, epochs):
-        print("Starting train…")
-        train_start = time.time()
-        print('Epoch: {}.'.format(e))
-
-        cum_loss = 0
-        cum_sum = 0
-        current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
-
-        for i in range(X_batches.shape[0]):
-            batch_loss, _, current_state, output = session.run([loss, train, state, Z],
-                                                               feed_dict={X: X_batches[i],
-                                                                          Y: Y_batches[i],
-                                                                          S: current_state,
-                                                                          M: mask[i]})
-
-            cum_sum += np.sum(mask[i])
-            cum_loss += batch_loss * np.sum(mask[i])
-            print('Batch: ' + str(i) + '\tLoss: ' + str(batch_loss))
-
-        epoch_loss = cum_loss / cum_sum
-
-        train_end = time.time()
-        train_time = train_end - train_start
-
-        print('Train Loss: {:.2f}. Train Time: {} sec.'.format(epoch_loss, train_time))
-        f_train.write(str(e) + ', ' + str(epoch_loss) + ',' + str(train_time) + '\n')
-
-    f_train.close()
-
-    saver = tf.train.Saver()
-    saver.save(session, 'train/')
-
-    # Generate 20 sequences composed of 256 characters to evaluate the network
-    num_sequence = 20
-    seq_length = 256
-
-    f_generation = open('out/generation.txt', "w")
-    sequences = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation)
-
-    f_generation.close()
+if __name__ == '__main__':
+    main()
