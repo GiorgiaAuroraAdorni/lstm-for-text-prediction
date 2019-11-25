@@ -180,6 +180,23 @@ def net_param(hidden_units, learning_rate, num_layers):
     return X, Y, S, Z, state, loss, train
 
 
+def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq):
+    # num_sequence = 20
+    # seq_length = 256
+    k = len(int_to_char)
+
+    # Use the distribution of the output to generate a new character accordingly the distribution
+    initial_chars = ''
+
+    for i in range(num_sequence):
+        char = np.random.choice(list(rel_freq.keys()), p=list(rel_freq.values()))
+        initial_chars += char
+
+    # Preprocess the input of the network
+    encoded_input = preprocessing(char_to_int, initial_chars)
+
+    one_hot = tf.one_hot(encoded_input, depth=k)
+
 ########################################################################################################################
 
 
