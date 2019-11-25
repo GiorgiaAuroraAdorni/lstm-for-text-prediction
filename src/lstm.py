@@ -194,7 +194,7 @@ def net_param_generation(hidden_units, num_layers):
     with tf.variable_scope("model_{}".format(1)):
         X = tf.placeholder(tf.float32, [20, 1, 106], name='X')
         S = tf.placeholder(tf.float32, [num_layers, 2, 20, hidden_units[0]], name='S')
-        M = tf.ones(X.shape[0:1])
+        M = tf.ones(X.shape[0:2])
 
         Z, state = create_network(hidden_units, num_layers, X, S, M)
 
