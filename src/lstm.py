@@ -59,8 +59,8 @@ def create_dicts(input_string, statistics=False):
     choose one integer to represent each character and save the statistics in a LaTeX table.
     :param input_string: input text
     :param statistics:
-    :return char_to_int, int_to_char, encoded_input, k: two dictionaries to map characters to int and int to chars,
-    the encoded input and the number of unique characters.
+    :return input_string, char_to_int, int_to_char, k, abs_freq, rel_freq: the updated input, two dictionaries to map
+    characters to int and int to chars, the number of unique characters and the frequencies.
     """
     input_string = input_string.lower()
 
@@ -105,7 +105,7 @@ def generate_batches(one_hot_input, batch_size, sequence_length, k):
     :param batch_size: number of blocks/batches in which divided the text
     :param sequence_length: the length of each subsequence of a block
     :param k:
-    :return batches: return the list of batches
+    :return batches, mask: return the list of batches
     """
     mod = 16 * 256
     input_dim = one_hot_input.shape[0]
@@ -163,7 +163,7 @@ def net_param(hidden_units, learning_rate, num_layers, batch_size):
     :param learning_rate:
     :param num_layers:
     :param batch_size:
-    :return:
+    :return X, Y, S, M, Z, state, loss, train:
     """
     with tf.variable_scope("model_{}".format(1)):
         X = tf.placeholder(tf.float32, [16, 256, 106], name='X')
@@ -187,12 +187,14 @@ def net_param(hidden_units, learning_rate, num_layers, batch_size):
 def net_param_generation(hidden_units, num_layers):
     """
 
+    :param hidden_units:
+    :param num_layers:
     :return S, X, Z, state:
     """
     with tf.variable_scope("model_{}".format(1)):
         X = tf.placeholder(tf.float32, [20, 1, 106], name='X')
         S = tf.placeholder(tf.float32, [num_layers, 2, 20, hidden_units[0]], name='S')
-        M = tf.ones_like(X)
+        M = tf.ones(X.shape[0:1])
 
         Z, state = create_network(hidden_units, num_layers, X, S, M)
 
@@ -321,43 +323,7 @@ def main():
         epochs = 5
         learning_rate = 1e-2
 
-        # Create model and set parameter
-        X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size)
-        session.run(tf.global_variables_initializer())
-
-        f_train = open('out/train.txt', "w")
-
-        for e in range(0, epochs):
-            print("Starting train…")
-            train_start = time.time()
-            print('Epoch: {}.'.format(e))
-
-            cum_loss = 0
-            cum_sum = 0
-            current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
-
-            for i in range(X_batches.shape[0]):
-                batch_loss, _, current_state, output = session.run([loss, train, state, Z], feed_dict={X: X_batches[i],
-                                                                                                       Y: Y_batches[i],
-                                                                                                       S: current_state,
-                                                                                                       M: mask[i]})
-
-                cum_sum += np.sum(mask[i])
-                cum_loss += batch_loss * np.sum(mask[i])
-                print('Batch: ' + str(i) + '\tLoss: ' + str(batch_loss))
-
-            epoch_loss = cum_loss / cum_sum
-
-            train_end = time.time()
-            train_time = train_end - train_start
-
-            print('Train Loss: {:.2f}. Train Time: {} sec.'.format(epoch_loss, train_time))
-            f_train.write(str(e) + ', ' + str(epoch_loss) + ',' + str(train_time) + '\n')
-
-        f_train.close()
-
-        saver = tf.train.Saver()
-        saver.save(session, 'train/')
+        train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session)
 
         # Generate 20 sequences composed of 256 characters to evaluate the network
         num_sequence = 20
@@ -370,6 +336,55 @@ def main():
         f_generation.close()
 
         writer.close()
+
+
+def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session):
+    """
+
+    :param X_batches:
+    :param Y_batches:
+    :param batch_size:
+    :param epochs:
+    :param hidden_units:
+    :param learning_rate:
+    :param mask:
+    :param num_layers:
+    :param session:
+    """
+    # Create model and set parameter
+    X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size)
+    session.run(tf.global_variables_initializer())
+
+    f_train = open('out/train.txt', "w")
+    for e in range(0, epochs):
+        print("Starting train…")
+        train_start = time.time()
+        print('Epoch: {}.'.format(e))
+
+        cum_loss = 0
+        cum_sum = 0
+        current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
+
+        for i in range(X_batches.shape[0]):
+            batch_loss, _, current_state, output = session.run([loss, train, state, Z], feed_dict={X: X_batches[i],
+                                                                                                   Y: Y_batches[i],
+                                                                                                   S: current_state,
+                                                                                                   M: mask[i]})
+
+            cum_sum += np.sum(mask[i])
+            cum_loss += batch_loss * np.sum(mask[i])
+            print('Batch: ' + str(i) + '\tLoss: ' + str(batch_loss))
+
+        epoch_loss = cum_loss / cum_sum
+
+        train_end = time.time()
+        train_time = train_end - train_start
+
+        print('Train Loss: {:.2f}. Train Time: {} sec.'.format(epoch_loss, train_time))
+        f_train.write(str(e) + ', ' + str(epoch_loss) + ',' + str(train_time) + '\n')
+    f_train.close()
+    saver = tf.train.Saver()
+    saver.save(session, 'train/')
 
 
 if __name__ == '__main__':
