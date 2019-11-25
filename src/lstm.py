@@ -180,7 +180,25 @@ def net_param(hidden_units, learning_rate, num_layers):
     return X, Y, S, Z, state, loss, train
 
 
-def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq):
+def net_param_generation():
+    """
+
+    :param num_sequence:
+    :return S, X, Z, state:
+    """
+    with tf.variable_scope("model_{}".format(1)):
+        X = tf.placeholder(tf.float32, [20, 1, 106], name='X')
+        S = tf.placeholder(tf.float32, [num_layers, 2, 20, hidden_units[0]], name='S')
+
+        Z, state = create_network(hidden_units, num_layers, X, S)
+
+    return S, X, Z, state
+
+
+def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation):
+    tf.reset_default_graph()
+    session2 = tf.Session(config=config)
+
     # num_sequence = 20
     # seq_length = 256
     k = len(int_to_char)
@@ -194,8 +212,55 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
 
     # Preprocess the input of the network
     encoded_input = preprocessing(char_to_int, initial_chars)
-
     one_hot = tf.one_hot(encoded_input, depth=k)
+
+    one_hot = session2.run(one_hot)
+
+    input = np.expand_dims(one_hot, axis=1)
+
+    # Initialise and restore the network
+    S, X, Z, state = net_param_generation()
+
+    Z_flat = tf.squeeze(Z)
+    Z_indices = tf.random.categorical(Z_flat, num_samples=1)
+
+    session2.run(tf.global_variables_initializer())
+
+    new_saver = tf.train.Saver()
+    new_saver.restore(session2, 'train/')
+
+    # Generate sequences
+    print("Starting generating…")
+    gen_start = time.time()
+    char_generated = np.zeros(shape=[num_sequence, seq_length], dtype=str)
+
+    current_state = np.zeros((2, 2, num_sequence, hidden_units[0]))
+
+    for j in range(seq_length):
+        current_state, output = session2.run([state, Z_indices], feed_dict={X: input, S: current_state})
+
+        output = [int_to_char[s] for s in output.ravel()]
+
+        char_generated[:, j] = output
+
+        encoded_input = preprocessing(char_to_int, output)
+        one_hot = tf.one_hot(encoded_input, depth=k)
+        one_hot = session2.run(one_hot)
+
+        input = np.expand_dims(one_hot, axis=1)
+
+    gen_end = time.time()
+    gen_time = gen_end - gen_start
+
+    f_generation.write('Generation Time, ' + str(gen_time))
+    print('Generation Time: {} sec.'.format(gen_time))
+
+    for idx, seq in enumerate(char_generated):
+        print("Sequence: \n", seq)
+        f_generation.write('Sequence ' + str(idx + 1) + ', ' + seq)
+
+    return char_generated
+
 
 ########################################################################################################################
 
