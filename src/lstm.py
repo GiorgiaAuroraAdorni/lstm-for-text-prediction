@@ -2,13 +2,14 @@
 #
 # LSTM
 
-import numpy as np
-import tensorflow.compat.v1 as tf
-import requests
 import collections
-import time
-import pandas as pd
 import os
+import time
+
+import numpy as np
+import pandas as pd
+import requests
+import tensorflow.compat.v1 as tf
 
 
 def check_dir(dir):
@@ -60,7 +61,6 @@ def create_dicts(input, statistics=False):
     :return char_to_int, int_to_char, encoded_input, k: two dictionaries to map characters to int and int to chars,
     the encoded input and the number of unique characters.
     """
-
     input = input.lower()
 
     input = np.array([c for c in input])
@@ -112,22 +112,29 @@ def generate_batches(input, batch_size, sequence_length, k):
     During training, batches must be presented in order, and the state corresponding to each block must be preserved
     across batches.
     The technique described above is called truncated backpropagation through time.
-    :param text: input sequence
+    :param input: input sequence (shape: (1))
     :param batch_size: number of blocks/batches in which divided the text
     :param sequence_length: the length of each subsequence of a block
     :param k:
     :return batches: return the list of batches
     """
-    mask = input.shape[0] - (input.shape[0] % (16 * 256))
-    cropped_input = input[:mask, ...]
+    mod = 16 * 256
+    input_dim = input.shape[0]
 
-    blocks = np.reshape(cropped_input, [batch_size, -1, sequence_length, k])
+    missing = mod - (input_dim % mod)
+    padded_input = np.pad(input, [(0, missing), (0, 0)], mode='constant')
+    mask = np.concatenate([np.ones(input_dim), np.zeros(missing)])
+
+    blocks = np.reshape(padded_input, [batch_size, -1, sequence_length, k])
+    mask = np.reshape(mask, [batch_size, -1, sequence_length])
+
     batches = np.swapaxes(blocks, 0, 1)
+    mask = np.swapaxes(mask, 0, 1)
 
-    return batches
+    return batches, mask
 
 
-def create_network(hidden_units, num_layers, X, S):
+def create_network(hidden_units, num_layers, X, S, mask):
     """
     MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
     :param hidden_units:
@@ -144,7 +151,8 @@ def create_network(hidden_units, num_layers, X, S):
     l = tf.unstack(S, axis=0)
     rnn_tuple_state = tuple([tf.nn.rnn_cell.LSTMStateTuple(l[idx][0], l[idx][1]) for idx in range(num_layers)])
 
-    rnn_outputs, state = tf.nn.dynamic_rnn(multi_cell, X, initial_state=rnn_tuple_state)
+    sequence_length = tf.reduce_sum(mask, axis=1)
+    rnn_outputs, state = tf.nn.dynamic_rnn(multi_cell, X, initial_state=rnn_tuple_state, sequence_length=sequence_length)
 
     # softmax output layer with k units
     W = tf.Variable(tf.truncated_normal(shape=(hidden_units[0], k), stddev=0.1), name='W')
@@ -166,45 +174,53 @@ def net_param(hidden_units, learning_rate, num_layers):
         X = tf.placeholder(tf.float32, [16, 256, 106], name='X')
         Y = tf.placeholder(tf.float32, [16, 256, 106], name='Y')
         S = tf.placeholder(tf.float32, [num_layers, 2, batch_size, hidden_units[0]], name='S')
+        M = tf.placeholder(tf.float32, [16, 256], name='M')
 
-        Z, state = create_network(hidden_units, num_layers, X, S)
+        Z, state = create_network(hidden_units, num_layers, X, S, M)
 
         # Loss function
         loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y, logits=Z)
-        loss = tf.reduce_mean(loss, name='loss')
+        loss = tf.reduce_sum(loss * M) / tf.reduce_sum(M)
 
         # Optimiser
         optimizer = tf.train.AdamOptimizer(learning_rate)
         train = optimizer.minimize(loss)
 
-    return X, Y, S, Z, state, loss, train
+    return X, Y, S, M, Z, state, loss, train
 
 
 def net_param_generation():
     """
 
-    :param num_sequence:
     :return S, X, Z, state:
     """
     with tf.variable_scope("model_{}".format(1)):
         X = tf.placeholder(tf.float32, [20, 1, 106], name='X')
         S = tf.placeholder(tf.float32, [num_layers, 2, 20, hidden_units[0]], name='S')
+        M = tf.ones_like(X)
 
-        Z, state = create_network(hidden_units, num_layers, X, S)
+        Z, state = create_network(hidden_units, num_layers, X, S, M)
 
     return S, X, Z, state
 
 
 def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation):
+    """
+
+    :param int_to_char:
+    :param char_to_int:
+    :param num_sequence:
+    :param seq_length:
+    :param rel_freq:
+    :param f_generation:
+    :return char_generated:
+    """
     tf.reset_default_graph()
     session2 = tf.Session(config=config)
 
-    # num_sequence = 20
-    # seq_length = 256
-    k = len(int_to_char)
-
     # Use the distribution of the output to generate a new character accordingly the distribution
     initial_chars = ''
+    k = len(int_to_char)
 
     for i in range(num_sequence):
         char = np.random.choice(list(rel_freq.keys()), p=list(rel_freq.values()))
@@ -232,7 +248,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     # Generate sequences
     print("Starting generating…")
     gen_start = time.time()
-    char_generated = np.zeros(shape=[num_sequence, seq_length], dtype=str)
+    sequences = np.zeros(shape=[num_sequence, seq_length], dtype=str)
 
     current_state = np.zeros((2, 2, num_sequence, hidden_units[0]))
 
@@ -241,7 +257,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
 
         output = [int_to_char[s] for s in output.ravel()]
 
-        char_generated[:, j] = output
+        sequences[:, j] = output
 
         encoded_input = preprocessing(char_to_int, output)
         one_hot = tf.one_hot(encoded_input, depth=k)
@@ -252,14 +268,15 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     gen_end = time.time()
     gen_time = gen_end - gen_start
 
-    f_generation.write('Generation Time, ' + str(gen_time))
+    f_generation.write('Generation Time, ' + str(gen_time) + '\n')
     print('Generation Time: {} sec.'.format(gen_time))
 
-    for idx, seq in enumerate(char_generated):
-        print("Sequence: \n", seq)
-        f_generation.write('Sequence ' + str(idx + 1) + ', ' + seq)
+    for idx, seq in enumerate(sequences):
+        print('Sequence ', str(idx + 1), ': ', seq, '\n')
+        seq = ''.join(seq)
+        f_generation.write('Sequence {}, {}\n'.format(idx + 1, seq))
 
-    return char_generated
+    return sequences
 
 
 ########################################################################################################################
@@ -297,10 +314,10 @@ with open(book, "r", encoding='utf-8') as reader:
     batch_size = 16
     sequence_length = 256
 
-    # batches.shape: (646, 16, 256, 106)=(batch_size, n_blocks, sequence_length, vocab_size)
-    X_batches = generate_batches(session.run(X), batch_size, sequence_length, k)
-    Y_batches = generate_batches(session.run(Y), batch_size, sequence_length, k)
-    print('Generated training batches')
+    # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
+    X_batches, mask = generate_batches(session.run(X), batch_size, sequence_length, k)
+    Y_batches, _ = generate_batches(session.run(Y), batch_size, sequence_length, k)
+    print('Generated training batches.')
 
     # Training would take at least 5 epochs with a learning rate of 10^-2
     hidden_units = [256, 256]
@@ -309,7 +326,7 @@ with open(book, "r", encoding='utf-8') as reader:
     learning_rate = 1e-2
 
     # Create model and set parameter
-    X, Y, S, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers)
+    X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers)
     session.run(tf.global_variables_initializer())
 
     f_train = open('out/train.txt', "w")
@@ -320,25 +337,27 @@ with open(book, "r", encoding='utf-8') as reader:
         print('Epoch: {}.'.format(e))
 
         cum_loss = 0
+        cum_sum = 0
         current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
 
         for i in range(X_batches.shape[0]):
-            # Train
-            train_loss, _, current_state, output = session.run([loss, train, state, Z],
+            batch_loss, _, current_state, output = session.run([loss, train, state, Z],
                                                                feed_dict={X: X_batches[i],
                                                                           Y: Y_batches[i],
-                                                                          S: current_state})
+                                                                          S: current_state,
+                                                                          M: mask[i]})
 
-            cum_loss += train_loss
-            print('batch: ' + str(i) + '\n\tloss: ' + str(train_loss))
+            cum_sum += np.sum(mask[i])
+            cum_loss += batch_loss * np.sum(mask[i])
+            print('Batch: ' + str(i) + '\tLoss: ' + str(batch_loss))
 
-        train_loss = cum_loss / X_batches.shape[0]
+        epoch_loss = cum_loss / cum_sum
 
         train_end = time.time()
         train_time = train_end - train_start
 
-        print('Train Loss: {:.2f}. Train Time: {} sec.'.format(train_loss, train_time))
-        f_train.write(str(e) + ', ' + str(train_loss) + ',' + str(train_time) + '\n')
+        print('Train Loss: {:.2f}. Train Time: {} sec.'.format(epoch_loss, train_time))
+        f_train.write(str(e) + ', ' + str(epoch_loss) + ',' + str(train_time) + '\n')
 
     f_train.close()
 
