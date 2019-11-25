@@ -145,12 +145,9 @@ def create_network(hidden_units, num_layers, X, S):
     rnn_tuple_state = tuple([tf.nn.rnn_cell.LSTMStateTuple(l[idx][0], l[idx][1]) for idx in range(num_layers)])
 
     rnn_outputs, state = tf.nn.dynamic_rnn(multi_cell, X, initial_state=rnn_tuple_state)
-    # rnn_outputs_flat = tf.reshape(rnn_outputs, [-1, hidden_units])
 
     # softmax output layer with k units
-    s = rnn_outputs.shape.as_list()[-1]
-
-    W = tf.Variable(tf.truncated_normal(shape=(s, k), stddev=0.1), name='W')
+    W = tf.Variable(tf.truncated_normal(shape=(hidden_units[0], k), stddev=0.1), name='W')
     b = tf.Variable(tf.zeros(shape=[k]), name='b')
     Z = tf.matmul(rnn_outputs, W) + b
 
@@ -237,32 +234,32 @@ with open(book, "r", encoding='utf-8') as reader:
 
     session.run(tf.global_variables_initializer())
 
-    f_train = open('train.txt', "w")
+
+    f_train = open('out/train.txt', "w")
 
     for e in range(0, epochs):
-        print('Epoch: {}.'.format(e))
-
-        avg_loss = 0
-
         print("Starting train…")
         train_start = time.time()
+        print('Epoch: {}.'.format(e))
 
+        cum_loss = 0
         current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
 
         for i in range(X_batches.shape[0]):
             # Train
-            train_loss, _, current_state = session.run([loss, train, state],
+            train_loss, _, current_state, output = session.run([loss, train, state, Z],
                                                        feed_dict={X: X_batches[i], Y: Y_batches[i], S: current_state})
 
-            avg_loss += train_loss
+            cum_loss += train_loss
             print('batch: ' + str(i) + '\n\tloss: ' + str(train_loss))
 
-        train_loss = avg_loss / X_batches.shape[0]
+        train_loss = cum_loss / X_batches.shape[0]
 
         train_end = time.time()
         train_time = train_end - train_start
 
         print('Train Loss: {:.2f}. Train Time: {} sec.'.format(train_loss, train_time))
-        f_train.write(str(epochs) + ', ' + str(train_loss) + ',' + str(train_time) + '\n')
+        f_train.write(str(e) + ', ' + str(train_loss) + ',' + str(train_time) + '\n')
+
 
     f_train.close()
