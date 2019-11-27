@@ -145,10 +145,10 @@ def create_dicts(input_string, model, statistics=False):
 
     k = len(new_abs_freq)
 
-    new_input_string = input_string
+    new_input_string = np.array([input_string], dtype=str)
     for sub_char in substituted_chars:
-        idx = np.where(new_input_string == sub_char)
-        new_input_string[idx] = 'UNK'
+        idx = np.where(new_input_string[0] == sub_char)
+        new_input_string[0, idx] = 'UNK'
 
     new_rel_freq = {key: value / len(new_input_string) for key, value in new_abs_freq.items()}
 
@@ -161,6 +161,7 @@ def create_dicts(input_string, model, statistics=False):
         df = save_statistics(directory, 2, char_to_int, new_abs_freq, new_rel_freq)
         print('Final frequencies: ', df)
 
+    new_input_string = new_input_string[0].tolist()
     return new_input_string, char_to_int, int_to_char, k, new_abs_freq, new_rel_freq
 
 
@@ -451,7 +452,7 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
     saver.save(session, 'train/')
 
 
-def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_layers=2):
+def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_layers=2, epochs=5):
     """
     :param download: boolean that specifies if download the books
     :param preprocess: boolean that specifies if apply the preprocessing to the books
@@ -517,7 +518,6 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
     if hidden_units is None:
         hidden_units = [256, 256]
 
-    epochs = 5
     learning_rate = 1e-2
 
     train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, d, mask,
@@ -540,21 +540,25 @@ if __name__ == '__main__':
     with open('/proc/self/oom_score_adj', 'w') as f:
         f.write('1000\n')
 
-    # main(download=True, preprocess=True, model='preprocessed', n_books=1)
+    main(download=True, preprocess=True, model='preprocessed', n_books=1)
     # main(download=True, preprocess=False, model='dropout', n_books=1, d=0.5)
     # main(download=True, preprocess=False, model='dropout-3layers', n_books=1, d=0.5,
     #      hidden_units=[256, 256, 256], num_layers=3)
-    # main(download=True, preprocess=True, model='preprocessed-dropout', n_books=1, d=0.5)
+    main(download=True, preprocess=True, model='preprocessed-dropout', n_books=1, d=0.5)
     main(download=True, preprocess=True, model='preprocessed-dropout-3layers', n_books=1, d=0.5,
          hidden_units=[256, 256, 256], num_layers=3)
-    # main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
+    main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
     # main(download=True, preprocess=False, model='multibooks', n_books=3)
 
+    main(download=True, preprocess=True, model='preprocessed-10epochs', n_books=1, epochs=10)
+    main(download=True, preprocess=True, model='preprocessed-dropout-10epochs', n_books=1, d=0.5, epochs=10)
+
     # my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
+    # my_plot('out/dropout/train.txt', 'out/dropout/img/', model='dropout')
+    # my_plot('out/dropout-3layers/train.txt', 'out/dropout-3layers/img/', model='dropout-3layers')
     # my_plot('out/preprocessed/train.txt', 'out/preprocessed/img/', 'preprocessed')
-    # my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', 'preprocessed-multibooks')
-    # my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
-    # my_plot('out/preprocessed-dropout/train.txt', 'out/preprocessed-dropout/img/', model='preprocessed-dropout')
+    # my_plot('out/preprocessed-dropout/train.txt', 'out/preprocessed-dropout/img/', 'preprocessed-dropout')
     # my_plot('out/preprocessed-dropout-3layers/train.txt', 'out/preprocessed-dropout-3layers/img/',
     #         model='preprocessed-dropout-3layers')
-
+    # my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', 'preprocessed-multibooks')
+    # my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
