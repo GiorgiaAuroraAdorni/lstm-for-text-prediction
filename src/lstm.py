@@ -28,28 +28,30 @@ def my_plot(train_dir, out_dir, model):
 
     :param train_dir: OrderedDict containing the model and the corrispondent validation accuracy
     :param out_dir: project directory for the output files
+    :param model:
     """
 
     check_dir(out_dir)
     train_loss = np.array([])
 
     with open(train_dir, 'r') as f:
-        train_lines = f.readlines()[1:]
+        train_lines = f.readlines()
 
         for line in train_lines:
             el = line.strip('\n').split(',')
             train_loss = np.append(train_loss, float(el[1]))
 
-    x = np.arange(1, 5, dtype=int)
+    x = np.arange(1, 6, dtype=int)
 
     plt.xlabel('epoch', fontsize=11)
     plt.ylabel('loss', fontsize=11)
+    plt.xticks(x)
 
-    plt.plot(x, train_loss, label='Train Loss of model ' + model)
+    plt.plot(x, train_loss, label='Train Loss')
 
     plt.legend()
-    plt.title('Train Loss of model ' + model, weight='bold', fontsize=12)
-    plt.savefig(out_dir + '.png')
+    plt.title('Train Loss: model "' + model + '"', weight='bold', fontsize=12)
+    plt.savefig(out_dir + 'loss.pdf')
     plt.show()
 
 
