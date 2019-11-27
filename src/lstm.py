@@ -249,20 +249,22 @@ def create_network(hidden_units, num_layers, X, S, mask):
     return Z, state
 
 
-def net_param(hidden_units, learning_rate, num_layers, batch_size):
+def net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k):
     """
 
     :param hidden_units:
     :param learning_rate:
     :param num_layers:
     :param batch_size:
+    :param seq_length:
+    :param k:
     :return X, Y, S, M, Z, state, loss, train:
     """
     with tf.variable_scope("model_{}".format(1)):
-        X = tf.placeholder(tf.float32, [16, 256, 106], name='X')
-        Y = tf.placeholder(tf.float32, [16, 256, 106], name='Y')
+        X = tf.placeholder(tf.float32, [batch_size, seq_length, k], name='X')
+        Y = tf.placeholder(tf.float32, [batch_size, seq_length, k], name='Y')
         S = tf.placeholder(tf.float32, [num_layers, 2, batch_size, hidden_units[0]], name='S')
-        M = tf.placeholder(tf.float32, [16, 256], name='M')
+        M = tf.placeholder(tf.float32, [batch_size, seq_length], name='M')
 
         Z, state = create_network(hidden_units, num_layers, X, S, M)
 
@@ -277,15 +279,16 @@ def net_param(hidden_units, learning_rate, num_layers, batch_size):
     return X, Y, S, M, Z, state, loss, train
 
 
-def net_param_generation(hidden_units, num_layers):
+def net_param_generation(hidden_units, num_layers, k):
     """
 
     :param hidden_units:
     :param num_layers:
+    :param k:
     :return S, X, Z, state:
     """
     with tf.variable_scope("model_{}".format(1)):
-        X = tf.placeholder(tf.float32, [20, 1, 106], name='X')
+        X = tf.placeholder(tf.float32, [20, 1, k], name='X')
         S = tf.placeholder(tf.float32, [num_layers, 2, 20, hidden_units[0]], name='S')
         M = tf.ones(X.shape[0:2])
 
@@ -329,7 +332,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     one_hot_input = np.expand_dims(one_hot, axis=1)
 
     # Initialise and restore the network
-    S, X, Z, state = net_param_generation(hidden_units, num_layers)
+    S, X, Z, state = net_param_generation(hidden_units, num_layers, k)
 
     Z_flat = tf.squeeze(Z)
     Z_indices = tf.random.categorical(Z_flat, num_samples=1)
@@ -373,13 +376,15 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     return sequences
 
 
-def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session,
-                model):
+def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_units, learning_rate, mask,
+                num_layers, session, model):
     """
 
     :param X_batches:
     :param Y_batches:
     :param batch_size:
+    :param seq_length:
+    :param k:
     :param epochs:
     :param hidden_units:
     :param learning_rate:
@@ -389,7 +394,7 @@ def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning
     :param model:
     """
     # Create model and set parameter
-    X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size)
+    X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k)
     session.run(tf.global_variables_initializer())
 
     f_train = open('out/' + model + '/train.txt', "w")
@@ -478,7 +483,9 @@ def main(download, preprocess, model):
     epochs = 5
     learning_rate = 1e-2
 
-    train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session, model)
+    train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, mask,
+                num_layers, session,
+                model)
 
     # Generate 20 sequences composed of 256 characters to evaluate the network
     num_sequence = 20
@@ -494,5 +501,8 @@ def main(download, preprocess, model):
 
 
 if __name__ == '__main__':
+    with open('/proc/self/oom_score_adj', 'w') as f:
+        f.write('1000\n')
+
     main(download=True, preprocess=True, model='preprocessed-multibooks')
     main(download=False, preprocess=False, model='multibooks')
