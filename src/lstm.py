@@ -4,9 +4,10 @@
 
 import collections
 import os
-import time
 import re
+import time
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
@@ -20,6 +21,36 @@ def check_dir(directory):
     """
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+
+def my_plot(train_dir, out_dir, model):
+    """
+
+    :param train_dir: OrderedDict containing the model and the corrispondent validation accuracy
+    :param out_dir: project directory for the output files
+    """
+
+    check_dir(out_dir)
+    train_loss = np.array([])
+
+    with open(train_dir, 'r') as f:
+        train_lines = f.readlines()[1:]
+
+        for line in train_lines:
+            el = line.strip('\n').split(',')
+            train_loss = np.append(train_loss, float(el[1]))
+
+    x = np.arange(1, 5, dtype=int)
+
+    plt.xlabel('epoch', fontsize=11)
+    plt.ylabel('loss', fontsize=11)
+
+    plt.plot(x, train_loss, label='Train Loss of model ' + model)
+
+    plt.legend()
+    plt.title('Train Loss of model ' + model, weight='bold', fontsize=12)
+    plt.savefig(out_dir + '.png')
+    plt.show()
 
 
 def download_books_from_url(books_list, url_list):
@@ -37,12 +68,18 @@ def download_books_from_url(books_list, url_list):
             text_file.write(r.content)
 
     # Define regex for the proprecessing of the files
-    start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.',
-                     'chapter i.', '*the borgias*']
+    # start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.',
+    #                  'chapter i.', '*the borgias*']
+    # # 'volume one', '1 the three presents', 'the borgia' occur multiple times in the book
+    # take_occurrence = [2, 2, 1, 1, 2]
+    # end_strings = ['footnotes', '――――', 'end of the man in the iron mask', 'end of ten years later', '————']
+    # removes = ['[0-9]+m', None, '\[[0-9]+\]', None, None]
+
+    start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.']
     # 'volume one', '1 the three presents', 'the borgia' occur multiple times in the book
-    take_occurrence = [2, 2, 1, 1, 2]
-    end_strings = ['footnotes', '――――', 'end of the man in the iron mask', 'end of ten years later', '————']
-    removes = ['[0-9]+m', None, '\[[0-9]+\]', None, None]
+    take_occurrence = [2, 2, 1]
+    end_strings = ['footnotes', '――――', 'end of the man in the iron mask']
+    removes = ['[0-9]+m', None, '\[[0-9]+\]']
 
     # Save preprocessed books
     for i in range(len(books_list)):
@@ -169,7 +206,7 @@ def save_statistics(directory, idx_table, char_to_int, abs_freq, rel_freq):
     return df
 
 
-def generate_batches(input_indices, batch_size, sequence_length, k):
+def generate_batches(input_indices, batch_size, sequence_length):
     """
     The text is too long to allow backpropagation through time, so it must be broken down into smaller sequences.
     In order to allow backpropagation for a batch of sequences, the text may first be broken down into a number of
@@ -183,7 +220,6 @@ def generate_batches(input_indices, batch_size, sequence_length, k):
     :param input_indices: input sequence (shape: (1))
     :param batch_size: number of blocks/batches in which divided the text
     :param sequence_length: the length of each subsequence of a block
-    :param k:
     :return batches, mask: return the list of batches
     """
     mod = 16 * 256
@@ -227,7 +263,7 @@ def create_network(hidden_units, num_layers, X, S, mask):
                                            initial_state=rnn_tuple_state,
                                            sequence_length=sequence_length)
 
-    # softmax output layer with k units
+    # Softmax output layer with k units
     W = tf.Variable(tf.truncated_normal(shape=(hidden_units[0], k), stddev=0.1), name='W')
     b = tf.Variable(tf.zeros(shape=[k]), name='b')
     Z = tf.matmul(rnn_outputs, W) + b
@@ -247,15 +283,19 @@ def net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k
     :return X, Y, S, M, Z, state, loss, train:
     """
     with tf.variable_scope("model_{}".format(1)):
-        X = tf.placeholder(tf.float32, [batch_size, seq_length, k], name='X')
-        Y = tf.placeholder(tf.float32, [batch_size, seq_length, k], name='Y')
+        X = tf.placeholder(tf.int32, [batch_size, seq_length], name='X')
+        Y = tf.placeholder(tf.int32, [batch_size, seq_length], name='Y')
         S = tf.placeholder(tf.float32, [num_layers, 2, batch_size, hidden_units[0]], name='S')
         M = tf.placeholder(tf.float32, [batch_size, seq_length], name='M')
 
-        Z, state = create_network(hidden_units, num_layers, X, S, M)
+        # Transform the batch with one hot encoding
+        X_onehot = tf.one_hot(X, depth=k)
+        Y_onehot = tf.one_hot(Y, depth=k)
+
+        Z, state = create_network(hidden_units, num_layers, X_onehot, S, M)
 
         # Loss function
-        loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y, logits=Z)
+        loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y_onehot, logits=Z)
         loss = tf.reduce_sum(loss * M) / tf.reduce_sum(M)
 
         # Optimiser
@@ -274,11 +314,14 @@ def net_param_generation(hidden_units, num_layers, k):
     :return S, X, Z, state:
     """
     with tf.variable_scope("model_{}".format(1)):
-        X = tf.placeholder(tf.float32, [20, 1, k], name='X')
+        X = tf.placeholder(tf.int32, [20, 1], name='X')
         S = tf.placeholder(tf.float32, [num_layers, 2, 20, hidden_units[0]], name='S')
         M = tf.ones(X.shape[0:2])
 
-        Z, state = create_network(hidden_units, num_layers, X, S, M)
+        # Transform the batch with one hot encoding
+        X_onehot = tf.one_hot(X, depth=k)
+
+        Z, state = create_network(hidden_units, num_layers, X_onehot, S, M)
 
     return S, X, Z, state
 
@@ -311,11 +354,6 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
 
     # Preprocess the input of the network
     encoded_input = [char_to_int[char] for char in initial_chars]
-    one_hot = tf.one_hot(encoded_input, depth=k)
-
-    one_hot = session2.run(one_hot)
-
-    one_hot_input = np.expand_dims(one_hot, axis=1)
 
     # Initialise and restore the network
     S, X, Z, state = net_param_generation(hidden_units, num_layers, k)
@@ -336,17 +374,13 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     current_state = np.zeros((2, 2, num_sequence, hidden_units[0]))
 
     for j in range(seq_length):
-        current_state, output = session2.run([state, Z_indices], feed_dict={X: one_hot_input, S: current_state})
+        current_state, output = session2.run([state, Z_indices], feed_dict={X: encoded_input, S: current_state})
 
         output = [int_to_char[s] for s in output.ravel()]
 
         sequences[:, j] = output
 
         encoded_input = [char_to_int[char] for char in output]
-        one_hot = tf.one_hot(encoded_input, depth=k)
-        one_hot = session2.run(one_hot)
-
-        one_hot_input = np.expand_dims(one_hot, axis=1)
 
     gen_end = time.time()
     gen_time = gen_end - gen_start
@@ -379,11 +413,12 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
     :param session:
     :param model:
     """
+    # X_batches = np.expand_dims(X_batches, axis=3)
+    # Y_batches = np.expand_dims(Y_batches, axis=3)
+
     # Create model and set parameter
     X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k)
     session.run(tf.global_variables_initializer())
-
-    X_batches, Y_batches = session.run([X_batches, Y_batches])
 
     f_train = open('out/' + model + '/train.txt', "w")
     for e in range(0, epochs):
@@ -419,11 +454,15 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
 
 def main(download, preprocess, model):
     # Download some books from Project Gutenberg in plain English text
-    books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
-                  'CelebratedCrimes']
+    # books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
+    #               'CelebratedCrimes']
+    # url_list = ['http://www.gutenberg.org/files/1184/1184-0.txt', 'http://www.gutenberg.org/files/1257/1257-0.txt',
+    #             'http://www.gutenberg.org/files/2759/2759-0.txt', 'http://www.gutenberg.org/files/2681/2681-0.txt',
+    #             'http://www.gutenberg.org/files/2760/2760-0.txt']
+
+    books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask']
     url_list = ['http://www.gutenberg.org/files/1184/1184-0.txt', 'http://www.gutenberg.org/files/1257/1257-0.txt',
-                'http://www.gutenberg.org/files/2759/2759-0.txt', 'http://www.gutenberg.org/files/2681/2681-0.txt',
-                'http://www.gutenberg.org/files/2760/2760-0.txt']
+                'http://www.gutenberg.org/files/2759/2759-0.txt']
 
     if download:
         download_books_from_url(books_list, url_list)
@@ -456,13 +495,9 @@ def main(download, preprocess, model):
     # Create batches for samples and targets
     # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
     print('Generating batches…')
-    X_batches, mask = generate_batches(X, batch_size, sequence_length, k)
-    Y_batches, _ = generate_batches(Y, batch_size, sequence_length, k)
+    X_batches, mask = generate_batches(X, batch_size, sequence_length)
+    Y_batches, _ = generate_batches(Y, batch_size, sequence_length)
     print('Finished generating batches…')
-
-    # Transform the batch with one hot encoding
-    X_batches_one_hot = tf.one_hot(X_batches, depth=k)
-    Y_batches_one_hot = tf.one_hot(Y_batches, depth=k)
 
     # Create session and create configuration to avoid allocating all GPU memory upfront.
     config = tf.ConfigProto()
@@ -477,7 +512,7 @@ def main(download, preprocess, model):
     epochs = 5
     learning_rate = 1e-2
 
-    train_model(X_batches_one_hot, Y_batches_one_hot, batch_size, sequence_length, k, epochs, hidden_units,
+    train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units,
                 learning_rate, mask, num_layers, session, model)
 
     # Generate 20 sequences composed of 256 characters to evaluate the network
@@ -494,8 +529,11 @@ def main(download, preprocess, model):
 
 
 if __name__ == '__main__':
-    # with open('/proc/self/oom_score_adj', 'w') as f:
-    #     f.write('1000\n')
+    with open('/proc/self/oom_score_adj', 'w') as f:
+        f.write('1000\n')
 
     main(download=True, preprocess=True, model='preprocessed-multibooks')
     main(download=False, preprocess=False, model='multibooks')
+
+    my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', model='preprocessed-multibooks')
+    my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
