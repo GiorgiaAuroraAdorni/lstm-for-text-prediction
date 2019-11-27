@@ -5,6 +5,7 @@
 import collections
 import os
 import time
+import re
 
 import numpy as np
 import pandas as pd
@@ -21,10 +22,125 @@ def check_dir(directory):
         os.makedirs(directory)
 
 
-def save_statistics(directory, char_to_int, abs_freq, rel_freq):
+def download_books_from_url(books_list, url_list):
+    """
+
+    :param books_list:
+    :param url_list:
+    """
+    # Save the books to file
+    for i, u in enumerate(url_list):
+        r = requests.get(u, allow_redirects=True)
+
+        check_dir('books/')
+        with open('books/' + books_list[i] + '.txt', 'wb') as text_file:
+            text_file.write(r.content)
+
+    # Define regex for the proprecessing of the files
+    start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.',
+                     'chapter i.', '*the borgias*']
+    # 'volume one', '1 the three presents', 'the borgia' occur multiple times in the book
+    take_occurrence = [2, 2, 1, 1, 2]
+    end_strings = ['footnotes', '――――', 'end of the man in the iron mask', 'end of ten years later', '————']
+    removes = ['[0-9]+m', None, '\[[0-9]+\]', None, None]
+
+    # Save preprocessed books
+    for i in range(len(books_list)):
+        with open('books/' + books_list[i] + '.txt', "r", encoding='utf-8') as reader:
+            input_string = reader.read()
+
+            input_string = preprocess_input(input_string, start_strings[i], end_strings[i], removes[i],
+                                            take_occurrence[i])
+
+            check_dir('books/preprocessed/')
+            with open('books/preprocessed/' + books_list[i] + '.txt', 'w') as text_file:
+                text_file.write(input_string)
+
+
+def preprocess_input(input_string, start, end, remove, occurrence):
+    """
+    :param input_string:
+    :param start:
+    :param end:
+    :param remove:
+    :param occurrence:
+    :return:
+    """
+    input_string = input_string.lower()
+
+    input_string = start + re.split(re.escape(start), input_string)[occurrence]
+    input_string = re.split(end, input_string)[0]
+
+    if remove is not None:
+        input_string = re.sub(remove, '', input_string)
+
+    input_string = re.sub('[\n]{3,}', '\n\n', input_string)
+
+    return input_string
+
+
+def create_dicts(input_string, model, statistics=False):
+    """
+    Convert characters to lower case, dount the number of unique characters and the frequency of each character,
+    choose one integer to represent each character and save the statistics in a LaTeX table.
+    :param input_string: input text
+    :param model: model name
+    :param statistics:
+    :return input_string, char_to_int, int_to_char, k, abs_freq, rel_freq: the updated input, two dictionaries to map
+    characters to int and int to chars, the number of unique characters and the frequencies.
+    """
+    input_string = np.array([c for c in input_string])
+    abs_freq = collections.Counter(input_string)
+    k1 = len(abs_freq)
+    abs_freq = collections.OrderedDict(abs_freq)
+    rel_freq = {key: value / len(input_string) for key, value in abs_freq.items()}
+
+    char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
+
+    print('Initial dict size: ', k1)
+    if statistics:
+        directory = 'out/' + model
+        df = save_statistics(directory, 1, char_to_int, abs_freq, rel_freq)
+        print('Initial frequencies: ', df)
+
+    new_abs_freq = abs_freq.copy()
+
+    # Substitute rare characters with unknown
+    substituted_chars = []
+    unk_val = 0
+    for k, v in abs_freq.items():
+        if v < 100:
+            unk_val += v
+            new_abs_freq['unk'] = unk_val
+            substituted_chars.append(k)
+            new_abs_freq.pop(k)
+
+    k = len(new_abs_freq)
+
+    new_input_string = input_string
+    for sub_char in substituted_chars:
+        idx = np.where(new_input_string == sub_char)
+        new_input_string[idx] = 'unk'
+
+    new_rel_freq = {key: value / len(new_input_string) for key, value in new_abs_freq.items()}
+
+    char_to_int = {key: idx for idx, key in enumerate(new_abs_freq)}
+    int_to_char = {idx: key for idx, key in enumerate(new_rel_freq)}
+
+    print('Final dict size: ', k)
+    if statistics:
+        directory = 'out/' + model
+        df = save_statistics(directory, 2, char_to_int, new_abs_freq, new_rel_freq)
+        print('Final frequencies: ', df)
+
+    return new_input_string, char_to_int, int_to_char, k, new_abs_freq, new_rel_freq
+
+
+def save_statistics(directory, idx_table, char_to_int, abs_freq, rel_freq):
     """
 
     :param directory:
+    :param idx_table:
     :param char_to_int:
     :param abs_freq:
     :param rel_freq:
@@ -38,51 +154,28 @@ def save_statistics(directory, char_to_int, abs_freq, rel_freq):
 
     data = {'Encoding': idx,
             'Character': chars,
-            'Absolute Frequence': abs_freqs,
-            'Relative Frequence': rel_freqs_print}
+            'Absolute Frequencies': abs_freqs,
+            'Relative Frequencies': rel_freqs_print}
 
     # Convert the dictionary into DataFrame
     df = pd.DataFrame(data)
     df = df.set_index('Encoding')
-    df = df.sort_values(by=['Absolute Frequence'], ascending=False)
+    df = df.sort_values(by=['Absolute Frequencies'], ascending=False)
 
     check_dir(directory)
-    with open(directory + 'mytable.tex', 'w') as latex_table:
+    with open(directory + 'MyTable' + str(idx_table) + '.tex', 'w') as latex_table:
         latex_table.write(df.to_latex())
 
     return df
 
 
-def create_dicts(input_string, statistics=False):
-    """
-    Convert characters to lower case, dount the number of unique characters and the frequency of each character,
-    choose one integer to represent each character and save the statistics in a LaTeX table.
-    :param input_string: input text
-    :param statistics:
-    :return input_string, char_to_int, int_to_char, k, abs_freq, rel_freq: the updated input, two dictionaries to map
-    characters to int and int to chars, the number of unique characters and the frequencies.
-    """
-    input_string = input_string.lower()
-
-    input_string = np.array([c for c in input_string])
-    abs_freq = collections.Counter(input_string)
-    k = len(abs_freq)
-    abs_freq = collections.OrderedDict(abs_freq)
-    rel_freq = {key: value / len(input_string) for key, value in abs_freq.items()}
-
-    char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
-    int_to_char = {idx: key for idx, key in enumerate(abs_freq)}
-
-    print(k)
-    if statistics:
-        directory = 'out/'
-        df = save_statistics(directory, char_to_int, abs_freq, rel_freq)
-        print(df)
-
-    return input_string, char_to_int, int_to_char, k, abs_freq, rel_freq
-
-
 def one_hot_batches(encoded_input, k):
+    """
+
+    :param encoded_input:
+    :param k:
+    :return:
+    """
     one_hot = tf.one_hot(encoded_input, depth=k)
     X = one_hot[:-1]
     Y = one_hot[1:]
@@ -280,65 +373,8 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     return sequences
 
 
-def main():
-    # Download a large book from Project Gutenberg in plain English text
-    download = False
-    book = 'TheCountOfMonteCristo.txt'
-
-    if download:
-        url = 'http://www.gutenberg.org/files/1184/1184-0.txt'
-        r = requests.get(url, allow_redirects=True)
-
-        with open(book, 'wb') as text_file:
-            text_file.write(r.content)
-
-    with open(book, "r", encoding='utf-8') as reader:
-        input_string = reader.read()
-
-        # preprocess data
-        input_string, char_to_int, int_to_char, k, abs_freq, rel_freq = create_dicts(input_string, statistics=True)
-
-        encoded_input = [char_to_int[char] for char in input_string]
-        X, Y = one_hot_batches(encoded_input, k)
-
-        # Create session and create configuration to avoid allocating all GPU memory upfront.
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-
-        session = tf.Session(config=config)
-        writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
-
-        # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
-        batch_size = 16
-        sequence_length = 256
-
-        # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
-        X_batches, mask = generate_batches(session.run(X), batch_size, sequence_length, k)
-        Y_batches, _ = generate_batches(session.run(Y), batch_size, sequence_length, k)
-        print('Generated training batches.')
-
-        # Training would take at least 5 epochs with a learning rate of 10^-2
-        hidden_units = [256, 256]
-        num_layers = 2
-        epochs = 5
-        learning_rate = 1e-2
-
-        train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session)
-
-        # Generate 20 sequences composed of 256 characters to evaluate the network
-        num_sequence = 20
-        seq_length = 256
-
-        f_generation = open('out/generation.txt', "w")
-        _ = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation,
-                               hidden_units, num_layers, config)
-
-        f_generation.close()
-
-        writer.close()
-
-
-def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session):
+def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session,
+                model):
     """
 
     :param X_batches:
@@ -350,12 +386,13 @@ def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning
     :param mask:
     :param num_layers:
     :param session:
+    :param model:
     """
     # Create model and set parameter
     X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size)
     session.run(tf.global_variables_initializer())
 
-    f_train = open('out/train.txt', "w")
+    f_train = open('out/' + model + '/train.txt', "w")
     for e in range(0, epochs):
         print("Starting train…")
         train_start = time.time()
@@ -387,5 +424,75 @@ def train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning
     saver.save(session, 'train/')
 
 
+def main(download, preprocess, model):
+    # Download some books from Project Gutenberg in plain English text
+    books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
+                  'CelebratedCrimes']
+    url_list = ['http://www.gutenberg.org/files/1184/1184-0.txt', 'http://www.gutenberg.org/files/1257/1257-0.txt',
+                'http://www.gutenberg.org/files/2759/2759-0.txt', 'http://www.gutenberg.org/files/2681/2681-0.txt',
+                'http://www.gutenberg.org/files/2760/2760-0.txt']
+
+    if download:
+        download_books_from_url(books_list, url_list)
+
+    inputs_string = ''
+
+    if preprocess:
+        path = 'books/preprocessed/'
+    else:
+        path = 'books/'
+
+    for i in range(len(books_list)):
+        with open(path + books_list[i] + '.txt', "r", encoding='utf-8') as reader:
+            input_string = reader.read()
+            inputs_string += input_string
+
+    # Create dictionaries
+    inputs_chars, char_to_int, int_to_char, k, abs_freq, rel_freq = create_dicts(inputs_string, model, statistics=True)
+
+    # Encode the inpute
+    encoded_input = [char_to_int[char] for char in inputs_chars]
+    X, Y = one_hot_batches(encoded_input, k)
+
+    # Create session and create configuration to avoid allocating all GPU memory upfront.
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
+    session = tf.Session(config=config)
+    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
+
+    # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
+    batch_size = 16
+    sequence_length = 256
+
+    # Create batches for samples and targets
+    # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
+    print('Generating batches…')
+    X_batches, mask = generate_batches(session.run(X), batch_size, sequence_length, k)
+    Y_batches, _ = generate_batches(session.run(Y), batch_size, sequence_length, k)
+    print('Finished generating batches…')
+
+    # Training would take at least 5 epochs with a learning rate of 10^-2
+    hidden_units = [256, 256]
+    num_layers = 2
+    epochs = 5
+    learning_rate = 1e-2
+
+    train_model(X_batches, Y_batches, batch_size, epochs, hidden_units, learning_rate, mask, num_layers, session, model)
+
+    # Generate 20 sequences composed of 256 characters to evaluate the network
+    num_sequence = 20
+    seq_length = 256
+
+    f_generation = open('out/' + model + '/generation.txt', "w")
+    _ = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation,
+                           hidden_units, num_layers, config)
+
+    f_generation.close()
+
+    writer.close()
+
+
 if __name__ == '__main__':
-    main()
+    main(download=True, preprocess=True, model='preprocessed-multibooks')
+    main(download=False, preprocess=False, model='multibooks')
