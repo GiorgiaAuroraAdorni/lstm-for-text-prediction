@@ -70,18 +70,12 @@ def download_books_from_url(books_list, url_list):
             text_file.write(r.content)
 
     # Define regex for the proprecessing of the files
-    # start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.',
-    #                  'chapter i.', '*the borgias*']
-    # # 'volume one', '1 the three presents', 'the borgia' occur multiple times in the book
-    # take_occurrence = [2, 2, 1, 1, 2]
-    # end_strings = ['footnotes', '――――', 'end of the man in the iron mask', 'end of ten years later', '————']
-    # removes = ['[0-9]+m', None, '\[[0-9]+\]', None, None]
-
-    start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.']
+    start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.',
+                     'chapter i.', '*the borgias*']
     # 'volume one', '1 the three presents', 'the borgia' occur multiple times in the book
-    take_occurrence = [2, 2, 1]
-    end_strings = ['footnotes', '――――', 'end of the man in the iron mask']
-    removes = ['[0-9]+m', None, '\[[0-9]+\]']
+    take_occurrence = [2, 2, 1, 1, 2]
+    end_strings = ['footnotes', '――――', 'end of the man in the iron mask', 'end of ten years later', '————']
+    removes = ['[0-9]+m', None, '\[[0-9]+\]', None, None]
 
     # Save preprocessed books
     for i in range(len(books_list)):
@@ -356,6 +350,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
 
     # Preprocess the input of the network
     encoded_input = [char_to_int[char] for char in initial_chars]
+    encoded_input = np.expand_dims(encoded_input, axis=1)
 
     # Initialise and restore the network
     S, X, Z, state = net_param_generation(hidden_units, num_layers, k)
@@ -383,6 +378,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
         sequences[:, j] = output
 
         encoded_input = [char_to_int[char] for char in output]
+        encoded_input = np.expand_dims(encoded_input, axis=1)
 
     gen_end = time.time()
     gen_time = gen_end - gen_start
@@ -454,20 +450,16 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
     saver.save(session, 'train/')
 
 
-def main(download, preprocess, model):
+def main(download, preprocess, model, n_books):
     # Download some books from Project Gutenberg in plain English text
-    # books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
-    #               'CelebratedCrimes']
-    # url_list = ['http://www.gutenberg.org/files/1184/1184-0.txt', 'http://www.gutenberg.org/files/1257/1257-0.txt',
-    #             'http://www.gutenberg.org/files/2759/2759-0.txt', 'http://www.gutenberg.org/files/2681/2681-0.txt',
-    #             'http://www.gutenberg.org/files/2760/2760-0.txt']
-
-    books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask']
+    books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
+                  'CelebratedCrimes']
     url_list = ['http://www.gutenberg.org/files/1184/1184-0.txt', 'http://www.gutenberg.org/files/1257/1257-0.txt',
-                'http://www.gutenberg.org/files/2759/2759-0.txt']
+                'http://www.gutenberg.org/files/2759/2759-0.txt', 'http://www.gutenberg.org/files/2681/2681-0.txt',
+                'http://www.gutenberg.org/files/2760/2760-0.txt']
 
     if download:
-        download_books_from_url(books_list, url_list)
+        download_books_from_url(books_list[:n_books], url_list[:n_books])
 
     inputs_string = ''
 
@@ -531,11 +523,14 @@ def main(download, preprocess, model):
 
 
 if __name__ == '__main__':
-    with open('/proc/self/oom_score_adj', 'w') as f:
-        f.write('1000\n')
+    # with open('/proc/self/oom_score_adj', 'w') as f:
+    #     f.write('1000\n')
 
-    main(download=True, preprocess=True, model='preprocessed-multibooks')
-    main(download=False, preprocess=False, model='multibooks')
+    main(download=False, preprocess=True, model='preprocessed', n_books=1)
+    # main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
+    # main(download=False, preprocess=False, model='multibooks', n_books=3)
 
-    my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', model='preprocessed-multibooks')
+    # my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
+    my_plot('out/preprocessed/train.txt', 'out/preprocessed/img/', 'preprocessed')
+    # my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', 'preprocessed-multibooks')
     my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
