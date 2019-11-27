@@ -16,7 +16,6 @@ import tensorflow.compat.v1 as tf
 
 def check_dir(directory):
     """
-
     :param directory: path to the directory
     """
     if not os.path.exists(directory):
@@ -25,12 +24,10 @@ def check_dir(directory):
 
 def my_plot(train_dir, out_dir, model):
     """
-
-    :param train_dir: OrderedDict containing the model and the corrispondent validation accuracy
+    :param train_dir: OrderedDict containing the model and the correspondent validation accuracy
     :param out_dir: project directory for the output files
-    :param model:
+    :param model: name of the model
     """
-
     check_dir(out_dir)
     train_loss = np.array([])
 
@@ -58,9 +55,8 @@ def my_plot(train_dir, out_dir, model):
 
 def download_books_from_url(books_list, url_list):
     """
-
-    :param books_list:
-    :param url_list:
+    :param books_list: list containing book titles
+    :param url_list: list containing book urls
     """
     # Save the books to file
     for i, u in enumerate(url_list):
@@ -70,7 +66,7 @@ def download_books_from_url(books_list, url_list):
         with open('books/' + books_list[i] + '.txt', 'wb') as text_file:
             text_file.write(r.content.lower())
 
-    # Define regex for the proprecessing of the files
+    # Define regex for the preprocessing of the files
     start_strings = ['volume one', '1 the three presents of d’artagnan the elder', 'chapter i.',
                      'chapter i.', '*the borgias*']
     # 'volume one', '1 the three presents', 'the borgia' occur multiple times in the book
@@ -93,12 +89,12 @@ def download_books_from_url(books_list, url_list):
 
 def preprocess_input(input_string, start, end, remove, occurrence):
     """
-    :param input_string:
-    :param start:
-    :param end:
-    :param remove:
-    :param occurrence:
-    :return:
+    :param input_string: the input string
+    :param start: a list containing the string by which each book starts
+    :param end: a list containing the string by which each book ends
+    :param remove: a list containing "stop words" to remove in each book
+    :param occurrence: a list containing the number off occurrence of the starting regex
+    :return input_string: updated input string
     """
     input_string = start + re.split(re.escape(start), input_string)[occurrence]
     input_string = re.split(end, input_string)[0]
@@ -113,13 +109,13 @@ def preprocess_input(input_string, start, end, remove, occurrence):
 
 def create_dicts(input_string, model, statistics=False):
     """
-    Convert characters to lower case, dount the number of unique characters and the frequency of each character,
+    Convert characters to lower case, count the number of unique characters and the frequency of each character,
     choose one integer to represent each character and save the statistics in a LaTeX table.
     :param input_string: input text
     :param model: model name
-    :param statistics:
-    :return input_string, char_to_int, int_to_char, k, abs_freq, rel_freq: the updated input, two dictionaries to map
-    characters to int and int to chars, the number of unique characters and the frequencies.
+    :param statistics: boolean that specify if save the statistics
+    :return new_input_string, char_to_int, int_to_char, k, new_abs_freq, new_rel_freq: the updated input,
+    two dictionaries to map characters to int and int to chars, the number of unique characters and the frequencies
     """
     input_string = np.array([c for c in input_string])
     abs_freq = collections.Counter(input_string)
@@ -143,7 +139,7 @@ def create_dicts(input_string, model, statistics=False):
     for k, v in abs_freq.items():
         if v < 100:
             unk_val += v
-            new_abs_freq['unk'] = unk_val
+            new_abs_freq['UNK'] = unk_val
             substituted_chars.append(k)
             new_abs_freq.pop(k)
 
@@ -152,7 +148,7 @@ def create_dicts(input_string, model, statistics=False):
     new_input_string = input_string
     for sub_char in substituted_chars:
         idx = np.where(new_input_string == sub_char)
-        new_input_string[idx] = 'unk'
+        new_input_string[idx] = 'UNK'
 
     new_rel_freq = {key: value / len(new_input_string) for key, value in new_abs_freq.items()}
 
@@ -170,13 +166,12 @@ def create_dicts(input_string, model, statistics=False):
 
 def save_statistics(directory, idx_table, char_to_int, abs_freq, rel_freq):
     """
-
-    :param directory:
-    :param idx_table:
-    :param char_to_int:
-    :param abs_freq:
-    :param rel_freq:
-    :return df:
+    :param directory: directory where saves the statistics
+    :param idx_table: index of the table
+    :param char_to_int: dictionary that map characters to integers
+    :param abs_freq: absolute frequencies
+    :param rel_freq: relative frequencies
+    :return df: data-frame containing all the statistics
     """
     idx = np.array(list(char_to_int.values()))
     chars = np.array(list(char_to_int.keys()))
@@ -215,7 +210,7 @@ def generate_batches(input_indices, batch_size, sequence_length):
     :param input_indices: input sequence (shape: (1))
     :param batch_size: number of blocks/batches in which divided the text
     :param sequence_length: the length of each subsequence of a block
-    :return batches, mask: return the list of batches
+    :return batches, mask: return the list of batches and the corresponding mask created after the padding
     """
     mod = 16 * 256
     input_dim = len(input_indices)
@@ -236,13 +231,13 @@ def generate_batches(input_indices, batch_size, sequence_length):
 def create_network(hidden_units, num_layers, X, S, mask, dropout):
     """
     MultiRNNCell with two LSTMCells, each containing 256 units, and a softmax output layer with k units.
-    :param hidden_units:
-    :param num_layers:
-    :param X: input
-    :param S: previous or initial state
-    :param mask:
-    :param dropout:
-    :return Z, state:
+    :param hidden_units: list containing the number of hidden units for each LSTM cell
+    :param num_layers: number of LSTM cells
+    :param X: input placeholder
+    :param S: placeholder for the LSTM state
+    :param mask: placeholder for the mask (used during the computation of the loss)
+    :param dropout: placeholder for the output_keep_prob of the dropout applied after all the LSTM cells
+    :return Z, state: the output and the state of the network
     """
     k = tf.shape(X)[2]
 
@@ -271,13 +266,13 @@ def create_network(hidden_units, num_layers, X, S, mask, dropout):
 def net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k):
     """
 
-    :param hidden_units:
-    :param learning_rate:
-    :param num_layers:
-    :param batch_size:
-    :param seq_length:
-    :param k:
-    :return X, Y, S, M, Z, state, loss, train:
+    :param hidden_units: list containing the number of hidden units for each LSTM cell
+    :param learning_rate: learning rate
+    :param num_layers: number of LSTM cells
+    :param batch_size: batch size
+    :param seq_length: length of the sequences
+    :param k: vocab size
+    :return X, Y, S, M, Z, state, loss, train: the state and the input placeholders and the the output of the network
     """
     with tf.variable_scope("model_{}".format(1)):
         X = tf.placeholder(tf.int32, [batch_size, seq_length], name='X')
@@ -306,10 +301,11 @@ def net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k
 def net_param_generation(hidden_units, num_layers, k):
     """
 
-    :param hidden_units:
-    :param num_layers:
-    :param k:
-    :return S, X, Z, state:
+    :param hidden_units: list containing the number of hidden units for each LSTM cell
+    :param num_layers: number of LSTM cells
+    :param k: vocab size
+    :return X, S, Z, dropout, state: the input and state placeholders: the output, the dropout placeholder and the
+    state of the network
     """
     with tf.variable_scope("model_{}".format(1)):
         X = tf.placeholder(tf.int32, [20, 1], name='X')
@@ -322,23 +318,22 @@ def net_param_generation(hidden_units, num_layers, k):
 
         Z, state = create_network(hidden_units, num_layers, X_onehot, S, M, dropout)
 
-    return S, X, Z, dropout, state
+    return X, S, Z, dropout, state
 
 
 def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation, hidden_units,
-                       num_layers, d, config):
+                       num_layers, config):
     """
-
-    :param int_to_char:
-    :param char_to_int:
-    :param num_sequence:
-    :param seq_length:
-    :param rel_freq:
-    :param f_generation:
-    :param hidden_units:
-    :param num_layers:
-    :param config:
-    :return char_generated:
+    :param int_to_char: dictionary that maps integer to characters
+    :param char_to_int: dictionary that maps characters to integer
+    :param num_sequence: number of sequences to generate
+    :param seq_length: length of the sequences
+    :param rel_freq: relative frequencies
+    :param f_generation: file writer
+    :param hidden_units: list containing the number of hidden units for each LSTM cell
+    :param num_layers: number of LSTM cells
+    :param config: settings of the session
+    :return sequences: the output sequences
     """
     tf.reset_default_graph()
     session2 = tf.Session(config=config)
@@ -356,7 +351,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     encoded_input = np.expand_dims(encoded_input, axis=1)
 
     # Initialise and restore the network
-    S, X, Z, dropout, state = net_param_generation(hidden_units, num_layers, k)
+    X, S, Z, dropout, state = net_param_generation(hidden_units, num_layers, k)
 
     Z_flat = tf.squeeze(Z)
     Z_indices = tf.random.categorical(Z_flat, num_samples=1)
@@ -403,18 +398,19 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
                 num_layers, session, model):
     """
 
-    :param X_batches:
-    :param Y_batches:
-    :param batch_size:
-    :param seq_length:
-    :param k:
-    :param epochs:
-    :param hidden_units:
-    :param learning_rate:
-    :param mask:
-    :param num_layers:
-    :param session:
-    :param model:
+    :param X_batches: input batches
+    :param Y_batches: target batches
+    :param batch_size: batch size
+    :param seq_length: length of the sequences
+    :param k: vocab size
+    :param epochs: number of epochs for the training
+    :param hidden_units: list containing the number of hidden units for each LSTM cell
+    :param learning_rate: learning rate
+    :param d: output_keep_prob of the dropout applied after all the LSTM cells
+    :param mask: mask of the valid characters
+    :param num_layers: number of LSTM cells
+    :param session: session
+    :param model: name of the model
     """
     # Create model and set parameter
     X, Y, S, M, Z, dropout, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size,
@@ -456,6 +452,15 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
 
 
 def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_layers=2):
+    """
+    :param download: boolean that specifies if download the books
+    :param preprocess: boolean that specifies if apply the preprocessing to the books
+    :param model: model name
+    :param n_books: number of books to use
+    :param d: output_keep_prob of the dropout applied after all the LSTM cells [with default value 1]
+    :param hidden_units: list containing the number of hidden units for each LSTM cell
+    :param num_layers: number of LSTM cells
+    """
     # Download some books from Project Gutenberg in plain English text
     books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
                   'CelebratedCrimes']
@@ -495,7 +500,7 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
     sequence_length = 256
 
     # Create batches for samples and targets
-    # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
+    # _batches.shape: (batch_size, n_blocks, sequence_length)
     print('Generating batches…')
     X_batches, mask = generate_batches(X, batch_size, sequence_length)
     Y_batches, _ = generate_batches(Y, batch_size, sequence_length)
@@ -524,7 +529,7 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
 
     f_generation = open('out/' + model + '/generation.txt', "w")
     _ = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation, hidden_units,
-                           num_layers, d, config)
+                           num_layers, config)
 
     f_generation.close()
 
@@ -532,15 +537,18 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
 
 
 if __name__ == '__main__':
-    # with open('/proc/self/oom_score_adj', 'w') as f:
-    #     f.write('1000\n')
+    with open('/proc/self/oom_score_adj', 'w') as f:
+        f.write('1000\n')
 
     # main(download=True, preprocess=True, model='preprocessed', n_books=1)
+    # main(download=True, preprocess=False, model='dropout', n_books=1, d=0.5)
+    # main(download=True, preprocess=False, model='dropout-3layers', n_books=1, d=0.5,
+    #      hidden_units=[256, 256, 256], num_layers=3)
+    # main(download=True, preprocess=True, model='preprocessed-dropout', n_books=1, d=0.5)
+    main(download=True, preprocess=True, model='preprocessed-dropout-3layers', n_books=1, d=0.5,
+         hidden_units=[256, 256, 256], num_layers=3)
     # main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
     # main(download=True, preprocess=False, model='multibooks', n_books=3)
-    # main(download=True, preprocess=False, model='preprocessed-dropout', n_books=1, d=0.5)
-    main(download=True, preprocess=False, model='preprocessed-dropout-3layers', n_books=1, d=0.5,
-         hidden_units=[256, 256, 256], num_layers=3)
 
     # my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
     # my_plot('out/preprocessed/train.txt', 'out/preprocessed/img/', 'preprocessed')
