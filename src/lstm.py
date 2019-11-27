@@ -371,7 +371,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
     gen_start = time.time()
     sequences = np.zeros(shape=[num_sequence, seq_length], dtype=str)
 
-    current_state = np.zeros((2, 2, num_sequence, hidden_units[0]))
+    current_state = np.zeros((num_layers, 2, num_sequence, hidden_units[0]))
 
     for j in range(seq_length):
         current_state, output = session2.run([state, Z_indices], feed_dict={X: encoded_input,
@@ -429,7 +429,7 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
 
         cum_loss = 0
         cum_sum = 0
-        current_state = np.zeros((2, 2, batch_size, hidden_units[0]))
+        current_state = np.zeros((num_layers, 2, batch_size, hidden_units[0]))
 
         for i in range(X_batches.shape[0]):
             batch_loss, _, current_state, output = session.run([loss, train, state, Z], feed_dict={X: X_batches[i],
@@ -455,7 +455,7 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
     saver.save(session, 'train/')
 
 
-def main(download, preprocess, model, n_books, d=1.0, hidden_units=[256, 256], num_layers=2):
+def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_layers=2):
     # Download some books from Project Gutenberg in plain English text
     books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
                   'CelebratedCrimes']
@@ -509,6 +509,9 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=[256, 256], n
     writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
 
     # Training would take at least 5 epochs with a learning rate of 10^-2
+    if hidden_units is None:
+        hidden_units = [256, 256]
+
     epochs = 5
     learning_rate = 1e-2
 
@@ -535,9 +538,9 @@ if __name__ == '__main__':
     # main(download=True, preprocess=True, model='preprocessed', n_books=1)
     # main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
     # main(download=True, preprocess=False, model='multibooks', n_books=3)
-    main(download=True, preprocess=False, model='preprocessed-dropout', n_books=1, d=0.5)
+    # main(download=True, preprocess=False, model='preprocessed-dropout', n_books=1, d=0.5)
     main(download=True, preprocess=False, model='preprocessed-dropout-3layers', n_books=1, d=0.5,
-         hidden_units=[256, 256, 128], num_layers=3)
+         hidden_units=[256, 256, 256], num_layers=3)
 
     # my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
     # my_plot('out/preprocessed/train.txt', 'out/preprocessed/img/', 'preprocessed')
