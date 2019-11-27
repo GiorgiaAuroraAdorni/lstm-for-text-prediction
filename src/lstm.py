@@ -163,27 +163,13 @@ def save_statistics(directory, idx_table, char_to_int, abs_freq, rel_freq):
     df = df.sort_values(by=['Absolute Frequencies'], ascending=False)
 
     check_dir(directory)
-    with open(directory + 'MyTable' + str(idx_table) + '.tex', 'w') as latex_table:
+    with open(directory + '/MyTable' + str(idx_table) + '.tex', 'w') as latex_table:
         latex_table.write(df.to_latex())
 
     return df
 
 
-def one_hot_batches(encoded_input, k):
-    """
-
-    :param encoded_input:
-    :param k:
-    :return:
-    """
-    one_hot = tf.one_hot(encoded_input, depth=k)
-    X = one_hot[:-1]
-    Y = one_hot[1:]
-
-    return X, Y
-
-
-def generate_batches(one_hot_input, batch_size, sequence_length, k):
+def generate_batches(input_indices, batch_size, sequence_length, k):
     """
     The text is too long to allow backpropagation through time, so it must be broken down into smaller sequences.
     In order to allow backpropagation for a batch of sequences, the text may first be broken down into a number of
@@ -194,23 +180,23 @@ def generate_batches(one_hot_input, batch_size, sequence_length, k):
     During training, batches must be presented in order, and the state corresponding to each block must be preserved
     across batches.
     The technique described above is called truncated backpropagation through time.
-    :param one_hot_input: input sequence (shape: (1))
+    :param input_indices: input sequence (shape: (1))
     :param batch_size: number of blocks/batches in which divided the text
     :param sequence_length: the length of each subsequence of a block
     :param k:
     :return batches, mask: return the list of batches
     """
     mod = 16 * 256
-    input_dim = one_hot_input.shape[0]
+    input_dim = len(input_indices)
 
     missing = mod - (input_dim % mod)
-    padded_input = np.pad(one_hot_input, [(0, missing), (0, 0)], mode='constant')
-    mask = np.concatenate([np.ones(input_dim), np.zeros(missing)])
+    padded_input = np.pad(input_indices, [(0, missing)], mode='constant')
 
-    blocks = np.reshape(padded_input, [batch_size, -1, sequence_length, k])
-    mask = np.reshape(mask, [batch_size, -1, sequence_length])
-
+    blocks = np.reshape(padded_input, [batch_size, -1, sequence_length])
     batches = np.swapaxes(blocks, 0, 1)
+
+    mask = np.concatenate([np.ones(input_dim), np.zeros(missing)])
+    mask = np.reshape(mask, [batch_size, -1, sequence_length])
     mask = np.swapaxes(mask, 0, 1)
 
     return batches, mask
@@ -397,6 +383,8 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
     X, Y, S, M, Z, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size, seq_length, k)
     session.run(tf.global_variables_initializer())
 
+    X_batches, Y_batches = session.run([X_batches, Y_batches])
+
     f_train = open('out/' + model + '/train.txt', "w")
     for e in range(0, epochs):
         print("Starting train…")
@@ -455,16 +443,11 @@ def main(download, preprocess, model):
     # Create dictionaries
     inputs_chars, char_to_int, int_to_char, k, abs_freq, rel_freq = create_dicts(inputs_string, model, statistics=True)
 
-    # Encode the inpute
+    # Encode the input
     encoded_input = [char_to_int[char] for char in inputs_chars]
-    X, Y = one_hot_batches(encoded_input, k)
 
-    # Create session and create configuration to avoid allocating all GPU memory upfront.
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-
-    session = tf.Session(config=config)
-    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
+    X = encoded_input[:-1]
+    Y = encoded_input[1:]
 
     # Truncated backpropagation through time: use 16 blocks with subsequences of size 256.
     batch_size = 16
@@ -473,9 +456,20 @@ def main(download, preprocess, model):
     # Create batches for samples and targets
     # _batches.shape: (646, 16, 256, 106) = (batch_size, n_blocks, sequence_length, vocab_size)
     print('Generating batches…')
-    X_batches, mask = generate_batches(session.run(X), batch_size, sequence_length, k)
-    Y_batches, _ = generate_batches(session.run(Y), batch_size, sequence_length, k)
+    X_batches, mask = generate_batches(X, batch_size, sequence_length, k)
+    Y_batches, _ = generate_batches(Y, batch_size, sequence_length, k)
     print('Finished generating batches…')
+
+    # Transform the batch with one hot encoding
+    X_batches_one_hot = tf.one_hot(X_batches, depth=k)
+    Y_batches_one_hot = tf.one_hot(Y_batches, depth=k)
+
+    # Create session and create configuration to avoid allocating all GPU memory upfront.
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
+    session = tf.Session(config=config)
+    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
 
     # Training would take at least 5 epochs with a learning rate of 10^-2
     hidden_units = [256, 256]
@@ -483,17 +477,16 @@ def main(download, preprocess, model):
     epochs = 5
     learning_rate = 1e-2
 
-    train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, mask,
-                num_layers, session,
-                model)
+    train_model(X_batches_one_hot, Y_batches_one_hot, batch_size, sequence_length, k, epochs, hidden_units,
+                learning_rate, mask, num_layers, session, model)
 
     # Generate 20 sequences composed of 256 characters to evaluate the network
     num_sequence = 20
     seq_length = 256
 
     f_generation = open('out/' + model + '/generation.txt', "w")
-    _ = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation,
-                           hidden_units, num_layers, config)
+    _ = generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_freq, f_generation, hidden_units,
+                           num_layers, config)
 
     f_generation.close()
 
@@ -501,8 +494,8 @@ def main(download, preprocess, model):
 
 
 if __name__ == '__main__':
-    with open('/proc/self/oom_score_adj', 'w') as f:
-        f.write('1000\n')
+    # with open('/proc/self/oom_score_adj', 'w') as f:
+    #     f.write('1000\n')
 
     main(download=True, preprocess=True, model='preprocessed-multibooks')
     main(download=False, preprocess=False, model='multibooks')
