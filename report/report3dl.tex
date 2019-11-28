@@ -28,15 +28,60 @@
 \usepackage{csquotes}
 \usepackage{subfigure}
 
-\newcommand{\footlabel}[2]{%
-	\addtocounter{footnote}{1}%
-	\footnotetext[\thefootnote]{%
-		\addtocounter{footnote}{-1}%
-		\refstepcounter{footnote}\label{#1}%
-		#2%
-	}%
-	$^{\ref{#1}}$%
-}
+\usepackage{ifxetex,ifluatex}
+\usepackage{etoolbox}
+\usepackage[svgnames]{xcolor}
+
+\usepackage{tikz}
+
+\usepackage{framed}
+
+ \newcommand*\quotefont{\fontfamily{LinuxLibertineT-LF}} % selects Libertine as 
+ %the quote font
+
+
+\newcommand*\quotesize{40} % if quote size changes, need a way to make shifts 
+%relative
+% Make commands for the quotes
+\newcommand*{\openquote}
+{\tikz[remember picture,overlay,xshift=-4ex,yshift=-1ex]
+	\node (OQ) 
+	{\quotefont\fontsize{\quotesize}{\quotesize}\selectfont``};\kern0pt}
+
+\newcommand*{\closequote}[1]
+{\tikz[remember picture,overlay,xshift=4ex,yshift=-1ex]
+	\node (CQ) {\quotefont\fontsize{\quotesize}{\quotesize}\selectfont''};}
+
+% select a colour for the shading
+\colorlet{shadecolor}{WhiteSmoke}
+
+\newcommand*\shadedauthorformat{\emph} % define format for the author argument
+
+% Now a command to allow left, right and centre alignment of the author
+\newcommand*\authoralign[1]{%
+	\if#1l
+	\def\authorfill{}\def\quotefill{\hfill}
+	\else
+	\if#1r
+	\def\authorfill{\hfill}\def\quotefill{}
+	\else
+	\if#1c
+	\gdef\authorfill{\hfill}\def\quotefill{\hfill}
+	\else\typeout{Invalid option}
+	\fi
+	\fi
+	\fi}
+% wrap everything in its own environment which takes one argument (author) and 
+%one optional argument
+% specifying the alignment [l, r or c]
+%
+\newenvironment{shadequote}[2][l]%
+{\authoralign{#1}
+	\ifblank{#2}
+	{\def\shadequoteauthor{}\def\yshift{-2ex}\def\quotefill{\hfill}}
+	{\def\shadequoteauthor{\par\authorfill\shadedauthorformat{#2}}\def\yshift{2ex}}
+	\begin{snugshade}\begin{quote}\openquote}
+		{\shadequoteauthor\quotefill\closequote{\yshift}\end{quote}\end{snugshade}}
 
 \newcommand{\footref}[1]{%
 	$^{\ref{#1}}$%
@@ -55,8 +100,6 @@
 \cfoot{\footnotesize \thepage} 
 
 \begin{document}
-	
-
 	\thispagestyle{empty}  
 	\noindent{
 	\begin{tabular}{p{15cm}} 
@@ -91,66 +134,64 @@
 	First of all, the book \textit{The Count of Monte Cristo} has been  
 	downloaded in plain English text from Project Gutenberg.
 	
-	The first operation performed is the application of an initial 
-	preprocessing procedure that consists in the conversion to lower case of 
+	The first operation performed consists in the conversion to lower case of 
 	all the text characters. Afterwards, a simple analysis of the data was 
-	performed: the number of unique characters were counted as well as the 
-	absolute and relative frequency of each character. In total there are $106$ 
-	unique characters in the book.\bigskip
+	performed.
 	
-	In order to train the network, it is necessary to map the text strings to a 
-	numerical representation. Hence, two dictionaries that act as lookup tables 
-	are created: one mapping characters to integer, and the other integers to 
-	characters. This will be crucial for the creation of a one-hot encoding.
-	
-	In Table \ref{tab:statistics} are presented the $30$ most frequent 
-	characters, with the corresponding encoding and frequency.
+	The book contains about 2.65 million characters and in total there are $106$ unique characters. The character list is displayed in Figure \ref{fig:alphabet}, and it can seen that the books contains English letters, number, punctuation, symbols and Greek letters.
 	
 	\begin{figure}[htb]
-	\centering
-	\begin{tabular}{llcc}
-		\toprule
-		Encoding & Characters &  Absolute Frequencies & Relative Frequencies \\
-		\midrule
-		8        &           &              420940 &            15.901\% \\
-		5        &         e &              259094 &             9.787\% \\
-		7        &         t &              180542 &              6.82\% \\
-		21       &         a &              165546 &             6.253\% \\
-		3        &         o &              157076 &             5.933\% \\
-		18       &         i &              142302 &             5.375\% \\
-		11       &         n &              137584 &             5.197\% \\
-		14       &         s &              126590 &             4.782\% \\
-		15       &         h &              126368 &             4.773\% \\
-		2        &         r &              121407 &             4.586\% \\
-		24       &         d &               94099 &             3.554\% \\
-		22       &         l &               80730 &             3.049\% \\
-		0        &        \textbackslash n &               61739 &             
-		2.332\% \\
-		10       &         u &               60318 &             2.278\% \\
-		17       &         m &               57157 &             2.159\% \\
-		6        &         c &               52526 &             1.984\% \\
-		16       &         f &               45383 &             1.714\% \\
-		19       &         , &               45246 &             1.709\% \\
-		27       &         w &               43892 &             1.658\% \\
-		20       &         y &               42642 &             1.611\% \\
-		9        &         g &               35603 &             1.345\% \\
-		1        &         p &               34952 &              1.32\% \\
-		12       &         b &               27972 &             1.057\% \\
-		29       &         . &               21950 &             0.829\% \\
-		28       &         v &               21490 &             0.812\% \\
-		55       &         “ &               15712 &             0.594\% \\
-		57       &         ” &               15195 &             0.574\% \\
-		26       &         k &               12649 &             0.478\% \\
-		54       &         ; &                5993 &             0.226\% \\
-		56       &         ? &                4610 &             0.174\% \\
-		\dots       &         \dots &                \dots &             \dots 
-		\\
-		\bottomrule
-	\end{tabular}
-	\captionof{table}{Encoding and frequency of the 30 most frequent 
-	characters}
-	\label{tab:statistics}
+		\centering
+		\includegraphics[width=\linewidth]{alphabet.png}	
+		\caption{Characters in the book}
+		\label{fig:alphabet}
 	\end{figure}
+
+ 	In order to train the network, it is necessary to map the text strings to a 
+ 	numerical representation. First of all,	the number of unique characters were counted as well as the absolute and relative frequencies. Hence, two dictionaries that act as lookup tables are created: one mapping characters to integer, and the other integers to characters. This will be crucial for the creation of a one-hot encoding.
+ 	
+ 	In Table \ref{tab:statistics} are presented the $20$ most frequent 
+ 	characters, with the corresponding encodings and frequencies.
+	
+	\begin{figure}[htb]
+		\centering
+		\begin{tabular}{llcc}
+			\toprule
+			Encoding & Characters &  Absolute Frequencies & Relative 
+			Frequencies \\
+			\midrule
+			8        &           &              420940 &            15.901\% \\
+			5        &         e &              259094 &             9.787\% \\
+			7        &         t &              180542 &              6.82\% \\
+			21       &         a &              165546 &             6.253\% \\
+			3        &         o &              157076 &             5.933\% \\
+			18       &         i &              142302 &             5.375\% \\
+			11       &         n &              137584 &             5.197\% \\
+			14       &         s &              126590 &             4.782\% \\
+			15       &         h &              126368 &             4.773\% \\
+			2        &         r &              121407 &             4.586\% \\
+			24       &         d &               94099 &             3.554\% \\
+			22       &         l &               80730 &             3.049\% \\
+			0        &        \textbackslash n &               61739 
+			& 2.332\% \\
+			10       &         u &               60318 &             2.278\% \\
+			17       &         m &               57157 &             2.159\% \\
+			6        &         c &               52526 &             1.984\% \\
+			16       &         f &               45383 &             1.714\% \\
+			19       &         , &               45246 &             1.709\% \\
+			27       &         w &               43892 &             1.658\% \\
+			20       &         y &               42642 &             1.611\% \\
+			\dots       &         \dots &                \dots &             
+			\dots 
+			\\
+			\bottomrule
+		\end{tabular}
+		\captionof{table}{Encoding and frequency of the most frequent 
+		characters}
+		\label{tab:statistics}
+	\end{figure}
+	
+	
 
 	\bigskip
 	Soon after, training examples and targets were created. The input examples 
@@ -166,14 +207,12 @@
 	sequence in $n$ blocks and each block in $m$ subsequences which contain a 
 	fixed number of characters of the text.\bigskip
 	
-	The $i-\mathrm{th}$ batch is created taking the $i-\mathrm{th}$ subsequence 
+	The $i\mathrm{-th}$ batch is created taking the $i\mathrm{-th}$ subsequence 
 	from each block and computing the back-propagation on it. In this way, each 
 	batch has multiple subsequences and the computations are more efficient.
-	\textbf{FIXME:}This approach enables to pass the output state from a 
-	sequence to the one of the next block. The zero state is at the beginning 
-	of each epoch. \textbf{In TensorFlow, this requires feeding the current 
-	state to initial state, fetching final state, and feeding it to initial 
-	state in the next iteration.}\bigskip
+	
+	This approach enables to pass the output state of a batch as input state of the next batch. The state is reset to zero at the 
+	beginning of each epoch.\bigskip
 	
 	In the experiment that will be presented have been used 16 blocks with 
 	subsequences of size 256. 
@@ -195,7 +234,7 @@
 	
 	In Table \ref{tab:model0} is summarised the architecture of the network 
 	used in the first experiment.	
-	\begin{figure}[H]
+	\begin{figure}[htb]
 		\centering
 		
 		\begin{tabular}{ccc}
