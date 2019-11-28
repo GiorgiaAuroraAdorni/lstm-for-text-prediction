@@ -578,7 +578,7 @@ if __name__ == '__main__':
     #     f.write('1000\n')
 
     # main(download=True, preprocess=False, model='initial', n_books=1)
-    # main(download=True, preprocess=True, model='preprocessed', n_books=1)
+    main(download=True, preprocess=True, model='preprocessed', n_books=1)
     # main(download=True, preprocess=False, model='dropout', n_books=1, d=0.5)
     # main(download=True, preprocess=False, model='dropout-3layers', n_books=1, d=0.5,
     #      hidden_units=[256, 256, 256], num_layers=3)
@@ -609,5 +609,5 @@ if __name__ == '__main__':
     # my_plot('out/preprocessed-3layers/train.txt', 'out/preprocessed-3layers/img/', 'preprocessed-3layers')
     # my_plot('out/preprocessed-3layers-10epochs/train.txt', 'out/preprocessed-3layers-10epochs/img/',
     #         'preprocessed-3layers-10epochs', epochs=10)
-
-    display_results()
+    #
+    # display_results()
