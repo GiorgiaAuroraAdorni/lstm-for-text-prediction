@@ -82,21 +82,21 @@
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
 	\section{Introduction}
+	\label{section:intro}
 	The goal of this project is to implement a text generator based on Long 
 	Short-Term Memory (LSTM).
 	
-	
-	
 	\section{Preprocessing}
+	\label{section:preprocessing}
 	First of all, the book \textit{The Count of Monte Cristo} has been  
 	downloaded in plain English text from Project Gutenberg.
 	
-	The first operation performed consists in an initial preprocessing and 
-	analysis of the data.
-	First of all, all the text characters have been converted to lower case. 
-	Soon after, the number of unique characters were counted as well as the 
+	The first operation performed is the application of an initial 
+	preprocessing procedure that consists in the conversion to lower case of 
+	all the text characters. Afterwards, a simple analysis of the data was 
+	performed: the number of unique characters were counted as well as the 
 	absolute and relative frequency of each character. In total there are $106$ 
-	unique characters in the book.
+	unique characters in the book.\bigskip
 	
 	In order to train the network, it is necessary to map the text strings to a 
 	numerical representation. Hence, two dictionaries that act as lookup tables 
@@ -106,11 +106,11 @@
 	In Table \ref{tab:statistics} are presented the $30$ most frequent 
 	characters, with the corresponding encoding and frequency.
 	
-	\begin{figure}[H]
+	\begin{figure}[htb]
 	\centering
 	\begin{tabular}{llcc}
 		\toprule
-		Encoding & Character &  Absolute Frequence & Relative Frequence \\
+		Encoding & Characters &  Absolute Frequencies & Relative Frequencies \\
 		\midrule
 		8        &           &              420940 &            15.901\% \\
 		5        &         e &              259094 &             9.787\% \\
@@ -147,20 +147,103 @@
 		\\
 		\bottomrule
 	\end{tabular}
-	\captionof{table}{Books Statistics.}
+	\captionof{table}{Encoding and frequency of the 30 most frequent 
+	characters}
 	\label{tab:statistics}
 	\end{figure}
 
-	
-	The next step was the creation of a dictionary in which each integer 
-	represent each character. 
-	
+	\bigskip
+	Soon after, training examples and targets were created. The input examples 
+	corresponds to a sequence of characters, while the target of each character 
+	corresponds to the following character in the original sequence. In this 
+	way, there is no target for the last element of the sequence.
 	
 	\section{Truncated backpropagation through time}
+	\label{section:backpropagation}
 	
+	Given a very long sequence, it is impossible to feeding it entirely and 
+	then compute the back-propagation. Instead, it is possible to divide the 
+	sequence in $n$ blocks and each block in $m$ subsequences which contain a 
+	fixed number of characters of the text.\bigskip
+	
+	The $i-\mathrm{th}$ batch is created taking the $i-\mathrm{th}$ subsequence 
+	from each block and computing the back-propagation on it. In this way, each 
+	batch has multiple subsequences and the computations are more efficient.
+	\textbf{FIXME:}This approach enables to pass the output state from a 
+	sequence to the one of the next block. The zero state is at the beginning 
+	of each epoch. \textbf{In TensorFlow, this requires feeding the current 
+	state to initial state, fetching final state, and feeding it to initial 
+	state in the next iteration.}\bigskip
+	
+	In the experiment that will be presented have been used 16 blocks with 
+	subsequences of size 256. 
+	To ensure that all batches have sequences of the same length, before 
+	crating the batches, the text is padded in such a way that sequences that 
+	are shorter than 256 are filled with 0 at the end, thus avoiding to 
+	truncate them.
+	
+	A mask containing the index of the valid characters is created in order to 
+	be use to computed the loss.
+	
+	\section{Network}
+	\label{section:network}
+	
+	The model implemented is composed of a MultiRNNCell with two LSTMCells each 
+	containing 256 units, following by a softmax output layer with $k$ units, 
+	which correspond to the number of unique characters (one-hot encoding), in 
+	this case 106.
+	
+	In Table \ref{tab:model0} is summarised the architecture of the network 
+	used in the first experiment.	
+	\begin{figure}[H]
+		\centering
+		
+		\begin{tabular}{ccc}
+			\toprule
+			\textbf{LSTMCell1} & \textbf{LSTMCell2} & \textbf{softmax} \\
+			\midrule
+			256 & 256 & 106\\
+			\bottomrule
+		\end{tabular}
+		\captionof{table}{Network architecture}
+		\label{tab:model0}
+	\end{figure}
+
 	\section{Evolution of the training loss function}
+	\label{section:loss}
+
+	The training would take 5 epochs and Adam is used as optimiser with a 
+	learning rate of $10^2$. As loss function, the Softmax Cross Entropy with 
+	Logits is used since the problem can be treated as a classification one.
 	
+	All the models were implemented using TensorFlow and trained on an NVIDIA 
+	Tesla V100-PCIE-16GB GPU.
+	
+	The training loss of this experiment is shown in Figure 
+	\ref{fig:model0-loss}.
+	
+	\begin{figure}[htb]
+		\centering
+		\includegraphics[width=.7\linewidth]{../src/out/initial/img/loss.pdf}	
+		\caption{Training loss}
+		\label{fig:model0-loss}
+	\end{figure}
+
 	\section{Generate and document 20 sequences}
+	After training, in order to evaluate the network, 20 sequences composed of 
+	256 characters are generated.\bigskip
+	
+	The procedure of generation of a sequence starts by choosing an initial 
+	character randomly, based on the relative frequencies presented in Section 
+	\ref{section:preprocessing}.
+	
+	After that, the prediction distribution of the next character is given 
+	using the initial character and the state of the network. In order to 
+	calculate the index of the predicted character, a categorical distribution 
+	is used. 
+	
+	The predicted character is used as the following input of the model along 
+	with the previous hidden state.
 	
 	\section{Improvement of the model}
 	In the first model trained, also blanks and other noisy characters have 
