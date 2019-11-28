@@ -22,11 +22,12 @@ def check_dir(directory):
         os.makedirs(directory)
 
 
-def my_plot(train_dir, out_dir, model):
+def my_plot(train_dir, out_dir, model, epochs=5):
     """
     :param train_dir: OrderedDict containing the model and the correspondent validation accuracy
     :param out_dir: project directory for the output files
     :param model: name of the model
+    :param epochs: number of epochs
     """
     check_dir(out_dir)
     train_loss = np.array([])
@@ -38,7 +39,7 @@ def my_plot(train_dir, out_dir, model):
             el = line.strip('\n').split(',')
             train_loss = np.append(train_loss, float(el[1]))
 
-    x = np.arange(1, 6, dtype=int)
+    x = np.arange(1, epochs + 1, dtype=int)
 
     plt.xlabel('epoch', fontsize=11)
     plt.ylabel('loss', fontsize=11)
@@ -126,6 +127,7 @@ def create_dicts(input_string, model, statistics=False):
     char_to_int = {key: idx for idx, key in enumerate(abs_freq)}
 
     print('Initial dict size: ', k1)
+    print('Initial input string length: ', len(input_string))
     if statistics:
         directory = 'out/' + model
         df = save_statistics(directory, 1, char_to_int, abs_freq, rel_freq)
@@ -150,6 +152,8 @@ def create_dicts(input_string, model, statistics=False):
         idx = np.where(new_input_string[0] == sub_char)
         new_input_string[0, idx] = 'UNK'
 
+    new_input_string = new_input_string[0].tolist()
+
     new_rel_freq = {key: value / len(new_input_string) for key, value in new_abs_freq.items()}
 
     char_to_int = {key: idx for idx, key in enumerate(new_abs_freq)}
@@ -161,7 +165,7 @@ def create_dicts(input_string, model, statistics=False):
         df = save_statistics(directory, 2, char_to_int, new_abs_freq, new_rel_freq)
         print('Final frequencies: ', df)
 
-    new_input_string = new_input_string[0].tolist()
+    print('Preprocessed input string length: ', len(new_input_string))
     return new_input_string, char_to_int, int_to_char, k, new_abs_freq, new_rel_freq
 
 
@@ -396,7 +400,7 @@ def generate_sequences(int_to_char, char_to_int, num_sequence, seq_length, rel_f
 
 
 def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_units, learning_rate, d, mask,
-                num_layers, session, model):
+                num_layers, config, model):
     """
 
     :param X_batches: input batches
@@ -410,9 +414,13 @@ def train_model(X_batches, Y_batches, batch_size, seq_length, k, epochs, hidden_
     :param d: output_keep_prob of the dropout applied after all the LSTM cells
     :param mask: mask of the valid characters
     :param num_layers: number of LSTM cells
-    :param session: session
+    :param config: settings of the session
     :param model: name of the model
     """
+    # Create session
+    tf.reset_default_graph()
+    session = tf.Session(config=config)
+
     # Create model and set parameter
     X, Y, S, M, Z, dropout, state, loss, train = net_param(hidden_units, learning_rate, num_layers, batch_size,
                                                            seq_length, k)
@@ -461,6 +469,7 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
     :param d: output_keep_prob of the dropout applied after all the LSTM cells [with default value 1]
     :param hidden_units: list containing the number of hidden units for each LSTM cell
     :param num_layers: number of LSTM cells
+    :param epochs: number of epochs
     """
     # Download some books from Project Gutenberg in plain English text
     books_list = ['TheCountOfMonteCristo', 'TheThreeMusketeers', 'TheManInTheIronMask', 'TenYearsLater',
@@ -507,12 +516,9 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
     Y_batches, _ = generate_batches(Y, batch_size, sequence_length)
     print('Finished generating batches…')
 
-    # Create session and create configuration to avoid allocating all GPU memory upfront.
+    # Create configuration to avoid allocating all GPU memory upfront.
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-
-    session = tf.Session(config=config)
-    writer = tf.summary.FileWriter("var/tensorboard/gio", session.graph)
 
     # Training would take at least 5 epochs with a learning rate of 10^-2
     if hidden_units is None:
@@ -520,8 +526,8 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
 
     learning_rate = 1e-2
 
-    train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, d, mask,
-                num_layers, session, model)
+    # train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, d, mask,
+    #             num_layers, config, model)
 
     # Generate 20 sequences composed of 256 characters to evaluate the network
     num_sequence = 20
@@ -532,8 +538,6 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
                            num_layers, config)
 
     f_generation.close()
-
-    writer.close()
 
 
 if __name__ == '__main__':
@@ -552,6 +556,8 @@ if __name__ == '__main__':
 
     main(download=True, preprocess=True, model='preprocessed-10epochs', n_books=1, epochs=10)
     main(download=True, preprocess=True, model='preprocessed-dropout-10epochs', n_books=1, d=0.5, epochs=10)
+    # main(download=True, preprocess=True, model='preprocessed-10epochs', n_books=1, epochs=10)
+    # main(download=True, preprocess=True, model='preprocessed-dropout-10epochs', n_books=1, d=0.5, epochs=10)
 
     # my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
     # my_plot('out/dropout/train.txt', 'out/dropout/img/', model='dropout')
@@ -562,3 +568,6 @@ if __name__ == '__main__':
     #         model='preprocessed-dropout-3layers')
     # my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', 'preprocessed-multibooks')
     # my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
+    my_plot('out/preprocessed-10epochs/train.txt', 'out/preprocessed-10epochs/img/', 'preprocessed-10epochs', epochs=10)
+    my_plot('out/preprocessed-dropout-10epochs/train.txt', 'out/preprocessed-dropout-10epochs/img/',
+            'preprocessed-dropout-10epochs', epochs=10)
