@@ -58,7 +58,7 @@ def display_results():
     plot_dir = 'out/'
     model_dirs = ['initial/', 'dropout/', 'dropout-3layers/', 'preprocessed/', 'preprocessed-dropout/',
                   'preprocessed-dropout-3layers/', 'multibooks/', 'preprocessed-multibooks/', 'preprocessed-10epochs/',
-                  'preprocessed-dropout-10epochs/']
+                  'preprocessed-dropout-10epochs/', 'preprocessed-3layers/', 'preprocessed-3layers-10epochs/']
     train_losses = collections.OrderedDict()
     for model_dir in model_dirs:
         dir = plot_dir + model_dir
@@ -85,6 +85,7 @@ def display_results():
     print()
     train_losses = sorted(train_losses.items(), key=lambda el: el[1])
     print(train_losses)
+
 
 def download_books_from_url(books_list, url_list):
     """
@@ -558,8 +559,8 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
 
     learning_rate = 1e-2
 
-    # train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, d, mask,
-    #             num_layers, config, model)
+    train_model(X_batches, Y_batches, batch_size, sequence_length, k, epochs, hidden_units, learning_rate, d, mask,
+                num_layers, config, model)
 
     # Generate 20 sequences composed of 256 characters to evaluate the network
     num_sequence = 20
@@ -573,33 +574,40 @@ def main(download, preprocess, model, n_books, d=1.0, hidden_units=None, num_lay
 
 
 if __name__ == '__main__':
-    with open('/proc/self/oom_score_adj', 'w') as f:
-        f.write('1000\n')
+    # with open('/proc/self/oom_score_adj', 'w') as f:
+    #     f.write('1000\n')
 
-    main(download=True, preprocess=False, model='initial', n_books=1)
-    main(download=True, preprocess=True, model='preprocessed', n_books=1)
-    main(download=True, preprocess=False, model='dropout', n_books=1, d=0.5)
-    main(download=True, preprocess=False, model='dropout-3layers', n_books=1, d=0.5,
-         hidden_units=[256, 256, 256], num_layers=3)
-    main(download=True, preprocess=True, model='preprocessed-dropout', n_books=1, d=0.5)
-    main(download=True, preprocess=True, model='preprocessed-dropout-3layers', n_books=1, d=0.5,
-         hidden_units=[256, 256, 256], num_layers=3)
-    main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
-    main(download=True, preprocess=False, model='multibooks', n_books=3)
-    main(download=True, preprocess=True, model='preprocessed-10epochs', n_books=1, epochs=10)
-    main(download=True, preprocess=True, model='preprocessed-dropout-10epochs', n_books=1, d=0.5, epochs=10)
+    # main(download=True, preprocess=False, model='initial', n_books=1)
+    # main(download=True, preprocess=True, model='preprocessed', n_books=1)
+    # main(download=True, preprocess=False, model='dropout', n_books=1, d=0.5)
+    # main(download=True, preprocess=False, model='dropout-3layers', n_books=1, d=0.5,
+    #      hidden_units=[256, 256, 256], num_layers=3)
+    # main(download=True, preprocess=True, model='preprocessed-dropout', n_books=1, d=0.5)
+    # main(download=True, preprocess=True, model='preprocessed-dropout-3layers', n_books=1, d=0.5,
+    #      hidden_units=[256, 256, 256], num_layers=3)
+    # main(download=True, preprocess=True, model='preprocessed-multibooks', n_books=3)
+    # main(download=True, preprocess=False, model='multibooks', n_books=3)
+    # main(download=True, preprocess=True, model='preprocessed-10epochs', n_books=1, epochs=10)
+    # main(download=True, preprocess=True, model='preprocessed-dropout-10epochs', n_books=1, d=0.5, epochs=10)
+    # main(download=True, preprocess=True, model='preprocessed-3layers', n_books=1, hidden_units=[256, 256, 256],
+    #      num_layers=3)
+    # main(download=True, preprocess=True, model='preprocessed-3layers-10epochs', n_books=1, hidden_units=[256, 256, 256],
+    #      num_layers=3, epochs=10)
 
-    my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
-    my_plot('out/dropout/train.txt', 'out/dropout/img/', model='dropout')
-    my_plot('out/dropout-3layers/train.txt', 'out/dropout-3layers/img/', model='dropout-3layers')
-    my_plot('out/preprocessed/train.txt', 'out/preprocessed/img/', 'preprocessed')
-    my_plot('out/preprocessed-dropout/train.txt', 'out/preprocessed-dropout/img/', 'preprocessed-dropout')
-    my_plot('out/preprocessed-dropout-3layers/train.txt', 'out/preprocessed-dropout-3layers/img/',
-            model='preprocessed-dropout-3layers')
-    my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', 'preprocessed-multibooks')
-    my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
-    my_plot('out/preprocessed-10epochs/train.txt', 'out/preprocessed-10epochs/img/', 'preprocessed-10epochs', epochs=10)
-    my_plot('out/preprocessed-dropout-10epochs/train.txt', 'out/preprocessed-dropout-10epochs/img/',
-            'preprocessed-dropout-10epochs', epochs=10)
+    # my_plot('out/initial/train.txt', 'out/initial/img/', model='initial')
+    # my_plot('out/dropout/train.txt', 'out/dropout/img/', model='dropout')
+    # my_plot('out/dropout-3layers/train.txt', 'out/dropout-3layers/img/', model='dropout-3layers')
+    # my_plot('out/preprocessed/train.txt', 'out/preprocessed/img/', 'preprocessed')
+    # my_plot('out/preprocessed-dropout/train.txt', 'out/preprocessed-dropout/img/', 'preprocessed-dropout')
+    # my_plot('out/preprocessed-dropout-3layers/train.txt', 'out/preprocessed-dropout-3layers/img/',
+    #         model='preprocessed-dropout-3layers')
+    # my_plot('out/preprocessed-multibooks/train.txt', 'out/preprocessed-multibooks/img/', 'preprocessed-multibooks')
+    # my_plot('out/multibooks/train.txt', 'out/multibooks/img/', model='multibooks')
+    # my_plot('out/preprocessed-10epochs/train.txt', 'out/preprocessed-10epochs/img/', 'preprocessed-10epochs', epochs=10)
+    # my_plot('out/preprocessed-dropout-10epochs/train.txt', 'out/preprocessed-dropout-10epochs/img/',
+    #         'preprocessed-dropout-10epochs', epochs=10)
+    # my_plot('out/preprocessed-3layers/train.txt', 'out/preprocessed-3layers/img/', 'preprocessed-3layers')
+    # my_plot('out/preprocessed-3layers-10epochs/train.txt', 'out/preprocessed-3layers-10epochs/img/',
+    #         'preprocessed-3layers-10epochs', epochs=10)
 
     display_results()
